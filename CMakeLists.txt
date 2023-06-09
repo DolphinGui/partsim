@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16.0)
+cmake_minimum_required(VERSION 3.16.1)
 
 project(partsim CXX C)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -22,17 +22,10 @@ cpmaddpackage(
   "GLFW_USE_WAYLAND ON")
 cpmaddpackage(NAME fmt GIT_TAG 6.1.2 GITHUB_REPOSITORY fmtlib/fmt)
 
-add_executable(psim ${PROJECT_SRC}/main.cpp ${PROJECT_SRC}/glad.c
+add_executable(partsim ${PROJECT_SRC}/main.cpp ${PROJECT_SRC}/glad.c
                     ${PROJECT_SRC}/assets.c)
-target_include_directories(psim PRIVATE include)
-target_link_libraries(psim OpenGL glfw fmt)
+target_include_directories(partsim PRIVATE include)
+target_link_libraries(partsim vulkan glfw fmt)
 
-add_dependencies(psim shaders)
-target_compile_features(psim PRIVATE cxx_std_20)
-target_compile_features(psim PRIVATE c_std_23)
-add_custom_command(
-  TARGET psim
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:psim>/shaders/"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/shaders"
-          "$<TARGET_FILE_DIR:psim>/shaders")
+target_compile_features(partsim PRIVATE cxx_std_20)
+target_compile_features(partsim PRIVATE c_std_23)

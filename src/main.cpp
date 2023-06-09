@@ -1,34 +1,35 @@
-// clang-format off
-#include <glad/glad.h>
+#include "resource.hpp"
 #include <GLFW/glfw3.h>
-// clang-format on
+#include <cstddef>
 #include <fmt/core.h>
-
+#include <vulkan/vulkan.hpp>
 
 namespace {
-void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
-  glViewport(0, 0, width, height);
+size_t width = 800, height = 600;
+void framebuffer_size_callback(GLFWwindow *window, int w, int h) {
+  width = w;
+  height = h;
 }
+auto a = [](GLFWwindow *w) { glfwDestroyWindow(w); };
+using glfwWin = resource<GLFWwindow *, decltype(a)>;
+template <typename... Ts> auto makeWindow(Ts... args) {
+  return glfwWin{.handle = glfwCreateWindow(args...), .d = a};
+}
+
 auto setup_window() {
   glfwInit();
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  GLFWwindow *window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
-  if (window == NULL) {
+  auto window = makeWindow(800, 600, "LearnOpenGL", nullptr, nullptr);
+  if (window.handle == NULL) {
     fmt::print("Failed to create GLFW window");
     glfwTerminate();
     std::exit(-1);
   }
-  glfwMakeContextCurrent(window);
+  glfwMakeContextCurrent(window.handle);
 
-  if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-    fmt::print("Failed to initialize GLAD");
-    std::exit(-1);
-  }
-
-  glViewport(0, 0, 800, 600);
-  glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+  glfwSetFramebufferSizeCallback(window.handle, framebuffer_size_callback);
   return window;
 }
 
@@ -39,35 +40,21 @@ void processInput(GLFWwindow *window) {
 float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 // constexpr const uint8_t shader[] = std::embed
 } // namespace
+
 constexpr const char *vertexShaderSource =
-    "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
+#include "../shaders/shader.vert"
+    ;
+
 int main() {
-  auto window = setup_window();
+  {
+    auto window = setup_window();
 
-  // buffer data setup
-  GLuint VBO;
-  glGenBuffers(1, &VBO);
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    while (!glfwWindowShouldClose(window.handle)) {
+      processInput(window.handle);
 
-  unsigned int vertexShader;
-  vertexShader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-  glCompileShader(vertexShader);
-
-  while (!glfwWindowShouldClose(window)) {
-    processInput(window);
-
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glfwSwapBuffers(window);
-    glfwPollEvents();
+      glfwSwapBuffers(window.handle);
+      glfwPollEvents();
+    }
   }
   glfwTerminate();
   return 0;
