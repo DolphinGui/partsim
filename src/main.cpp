@@ -1,8 +1,8 @@
 #include "resource.hpp"
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <cstddef>
 #include <fmt/core.h>
-#include <vulkan/vulkan.hpp>
 
 namespace {
 size_t width = 800, height = 600;
@@ -38,7 +38,6 @@ void processInput(GLFWwindow *window) {
     glfwSetWindowShouldClose(window, true);
 }
 float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
-// constexpr const uint8_t shader[] = std::embed
 } // namespace
 
 constexpr const char *vertexShaderSource =
