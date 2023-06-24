@@ -1,7 +1,8 @@
 .PHONEY = all clean
 INCLUDE = -Iinclude -I.
-CPPFLAGS = -std=c++20 $(INCLUDE) -fPIC
-CFLAGS = -std=c11 $(INCLUDE) -fPIC
+FLAGS = -fPIC -fexceptions
+CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS)
+CFLAGS = -std=c11 $(INCLUDE) $(FLAGS)
 LDFLAGS = -lfmt -lglfw -lstdc++
 CC = clang
 CXX = clang++
@@ -38,5 +39,5 @@ build/shaders/vert.spv: shaders/shader.vert
 	glslc $^ -o $@
 
 build/vert.hpp: build/shaders/vert.spv
-	xxd -i $^ $@; \
+	@xxd -i $^ $@; \
 	sed -i '1s/^/#pragma once \ninline constexpr /' $@
