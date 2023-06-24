@@ -145,6 +145,10 @@ void setup_device() {
   queues.set_graphics(device.getQueue(graphics, 0));
   queues.set_transfer(device.getQueue(mem, 0));
 }
+
+void setup_surface() {
+  
+}
 } // namespace
 
 void setup_vk() {
