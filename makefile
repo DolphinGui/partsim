@@ -1,5 +1,5 @@
-.PHONEY = all ec depend
-INCLUDE = -Iinclude
+.PHONEY = all clean
+INCLUDE = -Iinclude -I.
 CPPFLAGS = -std=c++20 $(INCLUDE) -fPIC
 CFLAGS = -std=c11 $(INCLUDE) -fPIC
 LDFLAGS = -lfmt -lglfw -lstdc++
@@ -11,7 +11,10 @@ SRCS = $(C_SRCS) $(CPP_SRCS)
 OBJ =  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
 DEPS = $(addprefix build/, $(addsuffix .d, $(basename $(SRCS))))
 
-all: build/partsim 
+all: build/vert.hpp build/partsim
+
+clean:
+	rm -rdf build
 
 include $(DEPS)
 
@@ -27,5 +30,13 @@ build/src/%.o: src/%.c
 build/%.d: %.c*
 	@mkdir -p $(@D); \
 	set -e; rm -f $@; \
-	$(CC) -MM $(INCLUDE) $< > $@; \
-	sed -i '1s/^/build\/src\//' $@
+	$(CC) -MM -MG $(INCLUDE) $< > $@; \
+	sed -i '1s/^/$(subst /,\/,$@) build\/src\//' $@
+
+build/shaders/vert.spv: shaders/shader.vert
+	@mkdir -p $(@D); \
+	glslc $^ -o $@
+
+build/vert.hpp: build/shaders/vert.spv
+	xxd -i $^ $@; \
+	sed -i '1s/^/#pragma once \ninline constexpr /' $@

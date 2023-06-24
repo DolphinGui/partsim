@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 #include <cstddef>
 #include <fmt/core.h>
+#include "build/vert.hpp"
 
 namespace {
 size_t width = 800, height = 600;
@@ -39,10 +40,6 @@ void processInput(GLFWwindow *window) {
 }
 float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 } // namespace
-
-constexpr const char *vertexShaderSource =
-#include "../shaders/shader.vert"
-    ;
 
 int main() {
   {
