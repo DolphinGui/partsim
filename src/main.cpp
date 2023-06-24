@@ -1,38 +1,48 @@
-#include "resource.hpp"
-#define GLFW_INCLUDE_VULKAN
+#define VULKAN_HPP_NO_CONSTRUCTORS
 #include <GLFW/glfw3.h>
 #include <cstddef>
 #include <fmt/core.h>
-#include "build/vert.hpp"
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
+#include "glfw.hpp"
+#include "validation.hpp"
 
 namespace {
-size_t width = 800, height = 600;
-void framebuffer_size_callback(GLFWwindow *window, int w, int h) {
-  width = w;
-  height = h;
-}
-auto a = [](GLFWwindow *w) { glfwDestroyWindow(w); };
-using glfwWin = resource<GLFWwindow *, decltype(a)>;
-template <typename... Ts> auto makeWindow(Ts... args) {
-  return glfwWin{.handle = glfwCreateWindow(args...), .d = a};
-}
 
-auto setup_window() {
-  glfwInit();
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  auto window = makeWindow(800, 600, "LearnOpenGL", nullptr, nullptr);
-  if (window.handle == NULL) {
-    fmt::print("Failed to create GLFW window");
-    glfwTerminate();
-    std::exit(-1);
+vk::raii::Context context{};
+vk::raii::Instance instance{nullptr};
+
+void setup_instance() {
+
+  if (enableValidation && !check_validation_support()) {
+    throw std::runtime_error("validation layers requested, but not available!");
   }
-  glfwMakeContextCurrent(window.handle);
 
-  glfwSetFramebufferSizeCallback(window.handle, framebuffer_size_callback);
-  return window;
+  vk::ApplicationInfo appInfo{.pApplicationName = "Triangle",
+                              .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+                              .pEngineName = "None",
+                              .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+                              .apiVersion = VK_API_VERSION_1_0};
+
+  uint32_t glfwExtensionCount = 0;
+  const char **glfwExtensions;
+
+  auto properties = context.enumerateInstanceExtensionProperties();
+
+  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+  vk::InstanceCreateInfo createInfo{
+      .flags = {},
+      .pApplicationInfo = &appInfo,
+      .enabledLayerCount = validationLayers.size(),
+      .ppEnabledLayerNames = validationLayers.data(),
+      .enabledExtensionCount = glfwExtensionCount,
+      .ppEnabledExtensionNames = glfwExtensions};
+
+  instance = vk::raii::Instance(context, vk::createInstance(createInfo));
 }
+
+void setup_a() {}
 
 void processInput(GLFWwindow *window) {
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -42,6 +52,7 @@ float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 } // namespace
 
 int main() {
+
   {
     auto window = setup_window();
 
