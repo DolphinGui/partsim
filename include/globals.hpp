@@ -1,6 +1,18 @@
 #pragma once
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_raii.hpp>
 
-inline vk::raii::Context context{};
-inline vk::raii::Instance instance{nullptr};
+namespace vk::raii {
+struct Context;
+struct Instance;
+struct DebugUtilsMessengerEXT;
+struct PhysicalDevices;
+struct Device;
+} // namespace vk::raii
+struct Queues;
+struct GLFWwin;
+
+extern vk::raii::Context context;
+extern vk::raii::Instance instance;
+extern vk::raii::DebugUtilsMessengerEXT debug_messager;
+extern vk::raii::Device device;
+extern Queues queues;
+extern GLFWwin window;

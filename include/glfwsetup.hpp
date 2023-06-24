@@ -3,11 +3,21 @@
 
 struct GLFWwin {
   GLFWwindow *handle{};
+  GLFWwin() = default;
+  GLFWwin(GLFWwindow *h) { handle = h; }
   ~GLFWwin() {
     if (handle)
       glfwDestroyWindow(handle);
   }
+  GLFWwin(GLFWwin &&rhs) {
+    handle = rhs.handle;
+    rhs.handle = nullptr;
+  }
+  auto &operator=(GLFWwin &&rhs) {
+    handle = rhs.handle;
+    rhs.handle = nullptr;
+    return *this;
+  }
 };
 
-
-GLFWwin setup_window();
+void setup_window();

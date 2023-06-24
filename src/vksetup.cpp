@@ -1,0 +1,154 @@
+#include <GLFW/glfw3.h>
+#include <cstdio>
+#include <fmt/core.h>
+#include <stdexcept>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
+
+#include "globals.hpp"
+#include "queues.hpp"
+#include "validation.hpp"
+#include "vkformat.hpp"
+#include "vksetup.hpp"
+
+namespace {
+inline VKAPI_ATTR VkBool32 VKAPI_CALL
+debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
+               VkDebugUtilsMessageTypeFlagsEXT type,
+               const VkDebugUtilsMessengerCallbackDataEXT *data, void *user) {
+
+  using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
+  auto severity = vk::DebugUtilsMessageSeverityFlagBitsEXT(sev);
+  if (severity & eError || severity & eWarning)
+    fmt::print(stderr, "[{}][{}] {}\n", severity,
+               vk::DebugUtilsMessageTypeFlagBitsEXT(type), data->pMessage);
+
+  return VK_FALSE;
+}
+
+inline std::vector<const char *> get_extensions() {
+  uint32_t glfwExtensionCount = 0;
+  const char **glfwExtensions;
+  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+  std::vector<const char *> extensions(glfwExtensions,
+                                       glfwExtensions + glfwExtensionCount);
+
+  if (enableValidation) {
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+  }
+
+  return extensions;
+}
+
+void setup_instance() {
+
+  if (enableValidation && !check_validation_support()) {
+    throw std::runtime_error("validation layers requested, but not available!");
+  }
+
+  vk::ApplicationInfo appInfo{.pApplicationName = "Triangle",
+                              .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+                              .pEngineName = "None",
+                              .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+                              .apiVersion = VK_API_VERSION_1_0};
+
+  auto extensions = get_extensions();
+
+  vk::InstanceCreateInfo createInfo{
+      .flags = {},
+      .pApplicationInfo = &appInfo,
+      .enabledLayerCount = validationLayers.size(),
+      .ppEnabledLayerNames = validationLayers.data(),
+      .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
+      .ppEnabledExtensionNames = extensions.data()};
+
+  instance = vk::raii::Instance(context, vk::createInstance(createInfo));
+}
+
+inline vk::Result createDebugUtilsMessengerEXT(
+    const VkDebugUtilsMessengerCreateInfoEXT &pCreateInfo) {
+  vk::Result result = vk::Result(VK_ERROR_EXTENSION_NOT_PRESENT);
+  VkDebugUtilsMessengerEXT messenger;
+
+  if (auto func = (PFN_vkCreateDebugUtilsMessengerEXT)instance.getProcAddr(
+          "vkCreateDebugUtilsMessengerEXT")) {
+    result = vk::Result(func(*instance, &pCreateInfo, nullptr, &messenger));
+  }
+  debug_messager = vk::raii::DebugUtilsMessengerEXT(instance, messenger);
+
+  return result;
+}
+
+void setup_debug() {
+  if (!enableValidation)
+    return;
+  using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
+  using enum vk::DebugUtilsMessageTypeFlagBitsEXT;
+  vk::DebugUtilsMessengerCreateInfoEXT createInfo{
+      .messageSeverity = eError | eInfo | eVerbose | eWarning,
+      .messageType =
+          ePerformance | eDeviceAddressBinding | eGeneral | eValidation,
+      .pfnUserCallback = debug_callback};
+
+  if (createDebugUtilsMessengerEXT(createInfo) != vk::Result::eSuccess) {
+    throw std::runtime_error("failed to set up debug messenger!");
+  }
+}
+
+void setup_device() {
+  auto phys_devices = vk::raii::PhysicalDevices(instance);
+  if (phys_devices.empty())
+    throw std::runtime_error("Could not find a vulkan-compatable device!");
+  // too lazy to score device, just pick first device
+  int index = 0;
+  int graphics = -1, mem = -1;
+  auto &phys = phys_devices.front();
+  for (auto &property : phys.getQueueFamilyProperties()) {
+    if (property.queueFlags & vk::QueueFlagBits::eGraphics) {
+      if (graphics == -1)
+        graphics = index;
+    }
+    if (property.queueFlags & vk::QueueFlagBits::eTransfer) {
+      if (mem == -1)
+        mem = index;
+    }
+    if (graphics != -1 && mem != -1)
+      break;
+    index++;
+  }
+
+  if (graphics == -1 || mem == -1)
+    throw std::runtime_error("could not find a queue");
+
+  vk::DeviceQueueCreateInfo queueCreateInfo{};
+  queueCreateInfo.queueFamilyIndex = graphics;
+  queueCreateInfo.queueCount = 1;
+  float queuePriority = 1.0f;
+  queueCreateInfo.pQueuePriorities = &queuePriority;
+  vk::DeviceCreateInfo createInfo{};
+  createInfo.pQueueCreateInfos = &queueCreateInfo;
+  createInfo.queueCreateInfoCount = 1;
+  vk::PhysicalDeviceFeatures deviceFeatures{};
+  createInfo.pEnabledFeatures = &deviceFeatures;
+  createInfo.enabledExtensionCount = 0;
+
+  if (enableValidation) {
+    createInfo.enabledLayerCount =
+        static_cast<uint32_t>(validationLayers.size());
+    createInfo.ppEnabledLayerNames = validationLayers.data();
+  } else {
+    createInfo.enabledLayerCount = 0;
+  }
+
+  device = vk::raii::Device(phys, createInfo);
+  queues.set_graphics(device.getQueue(graphics, 0));
+  queues.set_transfer(device.getQueue(mem, 0));
+}
+} // namespace
+
+void setup_vk() {
+  setup_instance();
+  setup_debug();
+  setup_device();
+}

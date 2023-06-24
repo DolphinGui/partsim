@@ -1,9 +1,9 @@
 .PHONEY = all clean
 INCLUDE = -Iinclude -I.
-FLAGS = -fPIC -fexceptions
+FLAGS = -fPIC -fexceptions -DGLFW_EXPOSE_NATIVE_WAYLAND -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS
 CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS)
 CFLAGS = -std=c11 $(INCLUDE) $(FLAGS)
-LDFLAGS = -lfmt -lglfw -lstdc++
+LDFLAGS = -lfmt -lglfw  -lvulkan
 CC = clang
 CXX = clang++
 C_SRCS = $(wildcard src/*.c)
@@ -20,7 +20,7 @@ clean:
 include $(DEPS)
 
 build/partsim: $(OBJ)
-	$(CC) $^ $(LDFLAGS) -o build/partsim
+	$(CXX) $^ $(LDFLAGS) -o build/partsim
 
 build/src/%.o: src/%.cpp
 	$(CXX) -c $(CPPFLAGS) $< -o $@
