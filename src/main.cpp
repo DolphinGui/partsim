@@ -4,13 +4,13 @@
 #include <fmt/core.h>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
-#include "glfw.hpp"
+
+#include "globals.hpp"
+#include "glfwsetup.hpp"
 #include "validation.hpp"
 
 namespace {
 
-vk::raii::Context context{};
-vk::raii::Instance instance{nullptr};
 
 void setup_instance() {
 
@@ -52,10 +52,8 @@ float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 } // namespace
 
 int main() {
-
   {
     auto window = setup_window();
-
     while (!glfwWindowShouldClose(window.handle)) {
       processInput(window.handle);
 

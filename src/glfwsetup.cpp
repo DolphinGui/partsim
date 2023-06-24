@@ -1,4 +1,4 @@
-#include "glfw.hpp"
+#include "glfwsetup.hpp"
 #include <stdexcept>
 
 inline size_t width = 800, height = 600;
