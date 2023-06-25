@@ -19,7 +19,7 @@ namespace {
 constexpr std::array deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 inline VKAPI_ATTR VkBool32 VKAPI_CALL
-debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
+debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
                VkDebugUtilsMessageTypeFlagsEXT type,
                const VkDebugUtilsMessengerCallbackDataEXT *data, void *user) {
 
@@ -32,7 +32,7 @@ debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
   return VK_FALSE;
 }
 
-inline std::vector<const char *> get_extensions() {
+inline std::vector<const char *> getExtensions() {
   uint32_t glfwExtensionCount = 0;
   const char **glfwExtensions;
   glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -47,7 +47,7 @@ inline std::vector<const char *> get_extensions() {
   return extensions;
 }
 
-void setup_instance() {
+void setupInstance() {
 
   if (enableValidation && !check_validation_support()) {
     throw std::runtime_error("validation layers requested, but not available!");
@@ -59,7 +59,7 @@ void setup_instance() {
                               .engineVersion = VK_MAKE_VERSION(1, 0, 0),
                               .apiVersion = VK_API_VERSION_1_0};
 
-  auto extensions = get_extensions();
+  auto extensions = getExtensions();
 
   vk::InstanceCreateInfo createInfo{
       .flags = {},
@@ -86,7 +86,7 @@ inline vk::Result createDebugUtilsMessengerEXT(
   return result;
 }
 
-void setup_debug() {
+void setupDebug() {
   if (!enableValidation)
     return;
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
@@ -95,14 +95,20 @@ void setup_debug() {
       .messageSeverity = eError | eInfo | eVerbose | eWarning,
       .messageType =
           ePerformance | eDeviceAddressBinding | eGeneral | eValidation,
-      .pfnUserCallback = debug_callback};
+      .pfnUserCallback = debugCallback};
 
   if (createDebugUtilsMessengerEXT(createInfo) != vk::Result::eSuccess) {
     throw std::runtime_error("failed to set up debug messenger!");
   }
 }
 
-void setup_device() {
+bool isDeviceSuitable() {
+  constexpr std::array deviceExtensions = {
+      VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  return false;
+}
+
+void setupDevice() {
   auto phys_devices = vk::raii::PhysicalDevices(instance);
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
@@ -132,17 +138,17 @@ void setup_device() {
     throw std::runtime_error(
         "Seperate graphics and present queue not supported");
 
-  vk::DeviceQueueCreateInfo queueCreateInfo{};
-  queueCreateInfo.queueFamilyIndex = graphics;
-  queueCreateInfo.queueCount = 1;
   float queuePriority = 1.0f;
-  queueCreateInfo.pQueuePriorities = &queuePriority;
-  vk::DeviceCreateInfo createInfo{};
-  createInfo.pQueueCreateInfos = &queueCreateInfo;
-  createInfo.queueCreateInfoCount = 1;
+  vk::DeviceQueueCreateInfo queueCreateInfo{.queueFamilyIndex =
+                                                static_cast<uint32_t>(graphics),
+                                            .queueCount = 1,
+                                            .pQueuePriorities = &queuePriority};
   vk::PhysicalDeviceFeatures deviceFeatures{};
-  createInfo.pEnabledFeatures = &deviceFeatures;
-  createInfo.enabledExtensionCount = 0;
+  vk::DeviceCreateInfo createInfo{
+      .queueCreateInfoCount = 1,
+      .pQueueCreateInfos = &queueCreateInfo,
+      .pEnabledFeatures = &deviceFeatures,
+  };
 
   if (enableValidation) {
     createInfo.enabledLayerCount =
@@ -157,7 +163,7 @@ void setup_device() {
   queues.set_transfer(device.getQueue(mem, 0));
 }
 
-void setup_surface() {
+void setupSurface() {
   auto info = vk::WaylandSurfaceCreateInfoKHR{
       .display = glfwGetWaylandDisplay(),
       .surface = glfwGetWaylandWindow(window.handle)};
@@ -165,9 +171,9 @@ void setup_surface() {
 }
 } // namespace
 
-void setup_vk() {
-  setup_instance();
-  setup_debug();
-  setup_surface();
-  setup_device();
+void setupVk() {
+  setupInstance();
+  setupDebug();
+  setupSurface();
+  setupDevice();
 }

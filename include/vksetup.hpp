@@ -1,3 +1,3 @@
 #pragma once
 
-void setup_vk();
+void setupVk();

@@ -19,7 +19,7 @@ float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 int main() {
   {
     setup_window();
-    setup_vk();
+    setupVk();
     while (!glfwWindowShouldClose(window.handle)) {
       processInput(window.handle);
 
