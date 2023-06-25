@@ -66,7 +66,7 @@ inline std::vector<const char *> getExtensions() {
   return extensions;
 }
 
-vk::raii::Instance setupInstance(vk::raii::Context &context) {
+vk::raii::Instance setup_instance(vk::raii::Context &context) {
 
   if (enableValidation && !check_validation_support()) {
     throw std::runtime_error("validation layers requested, but not available!");
@@ -92,7 +92,7 @@ vk::raii::Instance setupInstance(vk::raii::Context &context) {
 }
 
 vk::raii::DebugUtilsMessengerEXT
-setupDebug(const vk::raii::Instance &instance) {
+setup_debug(const vk::raii::Instance &instance) {
   if (!enableValidation)
     return nullptr;
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
@@ -215,7 +215,7 @@ std::pair<bool, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
               swapchain_details.ok(),
           indices};
 }
-vk::PhysicalDevice setupDevice(Context &c) {
+vk::PhysicalDevice setup_device(Context &c) {
   auto phys_devices = vk::raii::PhysicalDevices(c.instance);
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
@@ -265,7 +265,7 @@ vk::PhysicalDevice setupDevice(Context &c) {
   return **chosen;
 }
 
-vk::raii::SurfaceKHR setupSurface(GLFWwin &window,
+vk::raii::SurfaceKHR setup_surface(GLFWwin &window,
                                   vk::raii::Instance &instance) {
   auto info = vk::WaylandSurfaceCreateInfoKHR{
       .display = glfwGetWaylandDisplay(),
@@ -273,7 +273,7 @@ vk::raii::SurfaceKHR setupSurface(GLFWwin &window,
   return instance.createWaylandSurfaceKHR(info);
 }
 
-void setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
+void setup_swapchain(Context &c, vk::PhysicalDevice physicalDevice) {
   SwapChainSupportDetails swapchain_support =
       querySwapChainSupport(*c.surface, physicalDevice);
   vk::SurfaceFormatKHR surface_format =
@@ -309,11 +309,11 @@ void setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
 } // namespace
 
 Context::Context(GLFWwin &&win)
-    : window(std::move(win)), context{}, instance(setupInstance(context)),
-      debug_messager(setupDebug(instance)),
-      surface(setupSurface(window, instance)), device(nullptr),
+    : window(std::move(win)), context{}, instance(setup_instance(context)),
+      debug_messager(setup_debug(instance)),
+      surface(setup_surface(window, instance)), device(nullptr),
       swapchain(nullptr) {
-  auto device = setupDevice(*this);
-  setupSwapchain(*this, device);
+  auto device = setup_device(*this);
+  setup_swapchain(*this, device);
 }
 Context setupVk(GLFWwin &&win) { return Context(std::move(win)); }

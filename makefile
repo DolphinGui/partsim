@@ -44,3 +44,11 @@ build/shaders/vert.spv: shaders/shader.vert
 build/vert.hpp: build/shaders/vert.spv
 	@xxd -i $^ $@; \
 	sed -i '1s/^/#pragma once \ninline constexpr /' $@
+
+build/shaders/frag.spv: shaders/shader.frag
+	@mkdir -p $(@D); \
+	glslc $^ -o $@
+
+build/frag.hpp: build/shaders/frag.spv
+	@xxd -i $^ $@; \
+	sed -i '1s/^/#pragma once \ninline constexpr /' $@
