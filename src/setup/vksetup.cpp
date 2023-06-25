@@ -1,10 +1,13 @@
 #include <GLFW/glfw3.h>
+#include <GLFW/glfw3native.h>
 #include <cstdio>
 #include <fmt/core.h>
 #include <stdexcept>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
+#include "glfwsetup.hpp"
 #include "globals.hpp"
 #include "queues.hpp"
 #include "validation.hpp"
@@ -12,6 +15,9 @@
 #include "vksetup.hpp"
 
 namespace {
+
+constexpr std::array deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
 inline VKAPI_ATTR VkBool32 VKAPI_CALL
 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
                VkDebugUtilsMessageTypeFlagsEXT type,
@@ -102,24 +108,29 @@ void setup_device() {
     throw std::runtime_error("Could not find a vulkan-compatable device!");
   // too lazy to score device, just pick first device
   int index = 0;
-  int graphics = -1, mem = -1;
+  int graphics = -1, mem = -1, present = -1;
   auto &phys = phys_devices.front();
   for (auto &property : phys.getQueueFamilyProperties()) {
-    if (property.queueFlags & vk::QueueFlagBits::eGraphics) {
-      if (graphics == -1)
-        graphics = index;
+    if (property.queueFlags & vk::QueueFlagBits::eGraphics && graphics == -1) {
+      graphics = index;
     }
-    if (property.queueFlags & vk::QueueFlagBits::eTransfer) {
-      if (mem == -1)
-        mem = index;
+    if (property.queueFlags & vk::QueueFlagBits::eTransfer && mem == -1) {
+      mem = index;
     }
-    if (graphics != -1 && mem != -1)
+    if (phys.getSurfaceSupportKHR(index, *surface) && present == -1) {
+      present = index;
+    }
+
+    if (graphics != -1 && mem != -1 && present != -1)
       break;
     index++;
   }
 
-  if (graphics == -1 || mem == -1)
+  if (graphics == -1 || mem == -1 || present == -1)
     throw std::runtime_error("could not find a queue");
+  if (present != graphics)
+    throw std::runtime_error(
+        "Seperate graphics and present queue not supported");
 
   vk::DeviceQueueCreateInfo queueCreateInfo{};
   queueCreateInfo.queueFamilyIndex = graphics;
@@ -147,12 +158,16 @@ void setup_device() {
 }
 
 void setup_surface() {
-  
+  auto info = vk::WaylandSurfaceCreateInfoKHR{
+      .display = glfwGetWaylandDisplay(),
+      .surface = glfwGetWaylandWindow(window.handle)};
+  surface = instance.createWaylandSurfaceKHR(info);
 }
 } // namespace
 
 void setup_vk() {
   setup_instance();
   setup_debug();
+  setup_surface();
   setup_device();
 }
