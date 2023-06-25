@@ -7,6 +7,7 @@ struct DebugUtilsMessengerEXT;
 struct PhysicalDevices;
 struct Device;
 struct SurfaceKHR;
+struct SwapchainKHR;
 } // namespace vk::raii
 struct Queues;
 struct GLFWwin;
@@ -18,3 +19,4 @@ extern vk::raii::Device device;
 extern Queues queues;
 extern GLFWwin window;
 extern vk::raii::SurfaceKHR surface;
+extern vk::raii::SwapchainKHR swapchain;
