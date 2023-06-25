@@ -2,8 +2,8 @@
 #include <cstddef>
 #include <fmt/core.h>
 
+#include "context.hpp"
 #include "glfwsetup.hpp"
-#include "globals.hpp"
 #include "validation.hpp"
 #include "vksetup.hpp"
 
@@ -18,12 +18,11 @@ float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 
 int main() {
   {
-    setup_window();
-    setupVk();
-    while (!glfwWindowShouldClose(window.handle)) {
-      processInput(window.handle);
+    auto vk = setupVk(setup_window());
+    while (!glfwWindowShouldClose(vk.window.handle)) {
+      processInput(vk.window.handle);
 
-      glfwSwapBuffers(window.handle);
+      glfwSwapBuffers(vk.window.handle);
       glfwPollEvents();
     }
   }

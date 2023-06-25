@@ -1,9 +1,9 @@
 .PHONEY = all clean ec
 INCLUDE = -Iinclude -I.
-FLAGS = -fPIC -fexceptions -DGLFW_EXPOSE_NATIVE_WAYLAND -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS
-CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS)
+FLAGS = -fPIC -fexceptions -DGLFW_EXPOSE_NATIVE_WAYLAND -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS -g -O3
+CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS) 
 CFLAGS = -std=c11 $(INCLUDE) $(FLAGS)
-LDFLAGS = -lfmt -lglfw  -lvulkan
+LDFLAGS = -lfmt -lglfw  -lvulkan 
 CC = clang
 CXX = clang++
 C_SRCS =  $(shell find src/ -type f -name '*.c')

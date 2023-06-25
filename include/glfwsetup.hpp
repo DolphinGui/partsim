@@ -20,4 +20,4 @@ struct GLFWwin {
   }
 };
 
-void setup_window();
+GLFWwin setup_window();

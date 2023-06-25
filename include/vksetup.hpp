@@ -1,3 +1,6 @@
 #pragma once
 
-void setupVk();
+#include "context.hpp"
+#include "glfwsetup.hpp"
+
+Context setupVk(GLFWwin&&);
