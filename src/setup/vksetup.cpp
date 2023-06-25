@@ -3,7 +3,11 @@
 #include <cstdio>
 #include <fmt/core.h>
 #include <stdexcept>
+#include <string>
+#include <unordered_set>
+#include <utility>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_handles.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_structs.hpp>
 
@@ -15,13 +19,18 @@
 #include "vksetup.hpp"
 
 namespace {
-
+struct Indicies {
+  int graphics = -1, transfer = -1, present = -1;
+  bool isComplete() const noexcept {
+    return graphics != -1 || transfer != -1 || present != -1;
+  }
+};
 constexpr std::array deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 inline VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
-               VkDebugUtilsMessageTypeFlagsEXT type,
-               const VkDebugUtilsMessengerCallbackDataEXT *data, void *user) {
+              VkDebugUtilsMessageTypeFlagsEXT type,
+              const VkDebugUtilsMessengerCallbackDataEXT *data, void *user) {
 
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
   auto severity = vk::DebugUtilsMessageSeverityFlagBitsEXT(sev);
@@ -102,38 +111,69 @@ void setupDebug() {
   }
 }
 
-bool isDeviceSuitable() {
-  constexpr std::array deviceExtensions = {
-      VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-  return false;
+Indicies findQueueFamilies(vk::PhysicalDevice phys) {
+  Indicies i;
+  int index = 0;
+  for (auto &property : phys.getQueueFamilyProperties()) {
+    if (property.queueFlags & vk::QueueFlagBits::eGraphics &&
+        i.graphics == -1) {
+      i.graphics = index;
+    }
+    if (property.queueFlags & vk::QueueFlagBits::eTransfer &&
+        i.transfer == -1) {
+      i.transfer = index;
+    }
+    if (phys.getSurfaceSupportKHR(index, *surface) && i.present == -1) {
+      i.present = index;
+    }
+
+    if (i.graphics != -1 && i.transfer != -1 && i.present != -1)
+      break;
+    index++;
+  }
+  return i;
+}
+
+bool checkDeviceExtensionSupport(vk::PhysicalDevice device) {
+  auto availableExtensions = device.enumerateDeviceExtensionProperties();
+
+  auto requiredExtensions = std::unordered_set<std::string>(
+      deviceExtensions.begin(), deviceExtensions.end());
+
+  for (const auto &extension : availableExtensions) {
+    requiredExtensions.erase(extension.extensionName);
+  }
+
+  return requiredExtensions.empty();
+}
+
+std::pair<bool, Indicies> isDeviceSuitable(vk::PhysicalDevice device) {
+  Indicies indices = findQueueFamilies(device);
+
+  bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+  return {indices.isComplete() && extensionsSupported, indices};
 }
 
 void setupDevice() {
   auto phys_devices = vk::raii::PhysicalDevices(instance);
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
-  // too lazy to score device, just pick first device
-  int index = 0;
-  int graphics = -1, mem = -1, present = -1;
-  auto &phys = phys_devices.front();
-  for (auto &property : phys.getQueueFamilyProperties()) {
-    if (property.queueFlags & vk::QueueFlagBits::eGraphics && graphics == -1) {
-      graphics = index;
-    }
-    if (property.queueFlags & vk::QueueFlagBits::eTransfer && mem == -1) {
-      mem = index;
-    }
-    if (phys.getSurfaceSupportKHR(index, *surface) && present == -1) {
-      present = index;
-    }
-
-    if (graphics != -1 && mem != -1 && present != -1)
+  const vk::raii::PhysicalDevice *chosen = nullptr;
+  Indicies indicies;
+  for (auto &ph : phys_devices) {
+    if (auto [cond, i] = isDeviceSuitable(*ph); cond) {
+      chosen = &ph;
+      indicies = i;
       break;
-    index++;
+    }
   }
+  auto &[graphics, present, transfer] = indicies;
 
-  if (graphics == -1 || mem == -1 || present == -1)
-    throw std::runtime_error("could not find a queue");
+
+  if (!chosen)
+    throw std::runtime_error("Could not find a vulkan-compatable device!");
+
   if (present != graphics)
     throw std::runtime_error(
         "Seperate graphics and present queue not supported");
@@ -147,6 +187,8 @@ void setupDevice() {
   vk::DeviceCreateInfo createInfo{
       .queueCreateInfoCount = 1,
       .pQueueCreateInfos = &queueCreateInfo,
+      .enabledExtensionCount = deviceExtensions.size(),
+      .ppEnabledExtensionNames = deviceExtensions.data(),
       .pEnabledFeatures = &deviceFeatures,
   };
 
@@ -158,9 +200,9 @@ void setupDevice() {
     createInfo.enabledLayerCount = 0;
   }
 
-  device = vk::raii::Device(phys, createInfo);
+  device = vk::raii::Device(*chosen, createInfo);
   queues.set_graphics(device.getQueue(graphics, 0));
-  queues.set_transfer(device.getQueue(mem, 0));
+  queues.set_transfer(device.getQueue(transfer, 0));
 }
 
 void setupSurface() {
