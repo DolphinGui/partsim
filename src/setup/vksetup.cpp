@@ -449,3 +449,9 @@ Context::Context(GLFWwin &&win)
   setupViews(*this);
   setupPool(*this);
 }
+
+std::vector<vk::raii::CommandBuffer>
+Context::getCommands(uint32_t number, vk::CommandBufferLevel level) {
+  return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+      .commandPool = *pool, .level = level, .commandBufferCount = number});
+}

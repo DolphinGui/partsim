@@ -1,6 +1,7 @@
 #pragma once
 #include "glfwsetup.hpp"
 #include "queues.hpp"
+#include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
 struct Indicies {
@@ -13,7 +14,9 @@ struct Indicies {
 struct Context {
   Context(GLFWwin &&);
 
-  std::vector<vk::CommandBuffer> getCommands();
+  std::vector<vk::raii::CommandBuffer>
+  getCommands(uint32_t number,
+              vk::CommandBufferLevel level = vk::CommandBufferLevel::ePrimary);
 
   GLFWwin window;
 
