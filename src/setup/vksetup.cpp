@@ -9,10 +9,11 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_handles.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_structs.hpp>
 
+#include "build/frag.hpp"
+#include "build/vert.hpp"
 #include "context.hpp"
 #include "glfwsetup.hpp"
 #include "queues.hpp"
@@ -51,7 +52,7 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
   return VK_FALSE;
 }
 
-inline std::vector<const char *> getExtensions() {
+inline std::vector<const char *> getExtentions() {
   uint32_t glfwExtensionCount = 0;
   const char **glfwExtensions;
   glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -66,7 +67,7 @@ inline std::vector<const char *> getExtensions() {
   return extensions;
 }
 
-vk::raii::Instance setup_instance(vk::raii::Context &context) {
+vk::raii::Instance setupInstance(vk::raii::Context &context) {
 
   if (enableValidation && !check_validation_support()) {
     throw std::runtime_error("validation layers requested, but not available!");
@@ -78,7 +79,7 @@ vk::raii::Instance setup_instance(vk::raii::Context &context) {
                               .engineVersion = VK_MAKE_VERSION(1, 0, 0),
                               .apiVersion = VK_API_VERSION_1_0};
 
-  auto extensions = getExtensions();
+  auto extensions = getExtentions();
 
   vk::InstanceCreateInfo createInfo{
       .flags = {},
@@ -92,7 +93,7 @@ vk::raii::Instance setup_instance(vk::raii::Context &context) {
 }
 
 vk::raii::DebugUtilsMessengerEXT
-setup_debug(const vk::raii::Instance &instance) {
+setupDebug(const vk::raii::Instance &instance) {
   if (!enableValidation)
     return nullptr;
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
@@ -139,7 +140,7 @@ Indicies findQueueFamilies(vk::SurfaceKHR surface, vk::PhysicalDevice phys) {
   return i;
 }
 
-SwapChainSupportDetails querySwapChainSupport(vk::SurfaceKHR surface,
+SwapChainSupportDetails querySwapchainSupport(vk::SurfaceKHR surface,
                                               vk::PhysicalDevice device) {
   SwapChainSupportDetails details;
   details.capabilities = device.getSurfaceCapabilitiesKHR(surface);
@@ -148,7 +149,7 @@ SwapChainSupportDetails querySwapChainSupport(vk::SurfaceKHR surface,
   return details;
 }
 
-bool checkDeviceExtensionSupport(vk::PhysicalDevice device) {
+bool checkExtensionSupport(vk::PhysicalDevice device) {
   auto availableExtensions = device.enumerateDeviceExtensionProperties();
 
   auto requiredExtensions = std::unordered_set<std::string>(
@@ -209,13 +210,14 @@ vk::Extent2D chooseSwapExtent(Context &c,
 std::pair<bool, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
                                            vk::PhysicalDevice device) {
   Indicies indices = findQueueFamilies(surface, device);
-  bool extensions_supported = checkDeviceExtensionSupport(device);
-  auto swapchain_details = querySwapChainSupport(surface, device);
+  bool extensions_supported = checkExtensionSupport(device);
+  auto swapchain_details = querySwapchainSupport(surface, device);
   return {indices.isComplete() && extensions_supported &&
               swapchain_details.ok(),
           indices};
 }
-vk::PhysicalDevice setup_device(Context &c) {
+
+vk::PhysicalDevice setupDevice(Context &c) {
   auto phys_devices = vk::raii::PhysicalDevices(c.instance);
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
@@ -265,7 +267,7 @@ vk::PhysicalDevice setup_device(Context &c) {
   return **chosen;
 }
 
-vk::raii::SurfaceKHR setup_surface(GLFWwin &window,
+vk::raii::SurfaceKHR setupSurface(GLFWwin &window,
                                   vk::raii::Instance &instance) {
   auto info = vk::WaylandSurfaceCreateInfoKHR{
       .display = glfwGetWaylandDisplay(),
@@ -273,14 +275,14 @@ vk::raii::SurfaceKHR setup_surface(GLFWwin &window,
   return instance.createWaylandSurfaceKHR(info);
 }
 
-void setup_swapchain(Context &c, vk::PhysicalDevice physicalDevice) {
+vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
   SwapChainSupportDetails swapchain_support =
-      querySwapChainSupport(*c.surface, physicalDevice);
+      querySwapchainSupport(*c.surface, physicalDevice);
   vk::SurfaceFormatKHR surface_format =
       chooseSwapSurfaceFormat(swapchain_support.formats);
   vk::PresentModeKHR present_mode =
       chooseSwapPresentMode(swapchain_support.presentModes);
-  vk::Extent2D extent = chooseSwapExtent(c, swapchain_support.capabilities);
+  c.swapchain_extent = chooseSwapExtent(c, swapchain_support.capabilities);
   uint32_t image_count = swapchain_support.capabilities.minImageCount + 1;
   if (swapchain_support.capabilities.maxImageCount > 0 &&
       image_count > swapchain_support.capabilities.maxImageCount) {
@@ -292,7 +294,7 @@ void setup_swapchain(Context &c, vk::PhysicalDevice physicalDevice) {
       .minImageCount = image_count,
       .imageFormat = surface_format.format,
       .imageColorSpace = surface_format.colorSpace,
-      .imageExtent = extent,
+      .imageExtent = c.swapchain_extent,
       .imageArrayLayers = 1,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
       .imageSharingMode = vk::SharingMode::eExclusive,
@@ -303,17 +305,123 @@ void setup_swapchain(Context &c, vk::PhysicalDevice physicalDevice) {
 
   auto sw = (*c.device).createSwapchainKHR(info);
   (*c.device).destroySwapchainKHR(sw);
-  fmt::print("hello {}\n", (void *)*c.surface);
+  return surface_format.format;
+}
+
+void setupShaderAndPipeline(Context &c) {
+  auto frag = vk::raii::ShaderModule(
+      c.device,
+      vk::ShaderModuleCreateInfo{.codeSize = build_shaders_frag_spv_len,
+                                 .pCode = reinterpret_cast<const uint32_t *>(
+                                     &build_shaders_frag_spv)});
+
+  auto vert = vk::raii::ShaderModule(
+      c.device,
+      vk::ShaderModuleCreateInfo{.codeSize = build_shaders_vert_spv_len,
+                                 .pCode = reinterpret_cast<const uint32_t *>(
+                                     &build_shaders_vert_spv)});
+  std::array shader_stages = {vk::PipelineShaderStageCreateInfo{
+                                 .stage = vk::ShaderStageFlagBits::eVertex,
+                                 .module = *vert,
+                                 .pName = "main"},
+                             vk::PipelineShaderStageCreateInfo{
+                                 .stage = vk::ShaderStageFlagBits::eFragment,
+                                 .module = *frag,
+                                 .pName = "main"}};
+
+  std::array dynamic_states = {vk::DynamicState::eViewport,
+                               vk::DynamicState::eScissor};
+
+  vk::PipelineVertexInputStateCreateInfo vert_in_info{};
+
+  vk::PipelineInputAssemblyStateCreateInfo in_assembly{
+      .topology = vk::PrimitiveTopology::eTriangleList};
+
+  vk::PipelineViewportStateCreateInfo viewport_state{.viewportCount = 1,
+                                                    .scissorCount = 1};
+
+  vk::PipelineRasterizationStateCreateInfo rasterizer{
+      .polygonMode = vk::PolygonMode::eFill,
+      .cullMode = vk::CullModeFlagBits::eBack,
+      .frontFace = vk::FrontFace::eClockwise,
+      .lineWidth = 1.0};
+
+  vk::PipelineMultisampleStateCreateInfo multisampling{
+      .rasterizationSamples = vk::SampleCountFlagBits::e1};
+
+  using enum vk::ColorComponentFlagBits;
+  vk::PipelineColorBlendAttachmentState colorblend_attachment{
+      .colorWriteMask = eR | eG | eB | eA};
+
+  vk::PipelineColorBlendStateCreateInfo colorblending{
+      .logicOp = vk::LogicOp::eCopy,
+      .attachmentCount = 1,
+      .pAttachments = &colorblend_attachment};
+
+  std::array dyn_states = {vk::DynamicState::eViewport,
+                              vk::DynamicState::eScissor};
+  vk::PipelineDynamicStateCreateInfo dynamicState{
+      .dynamicStateCount = dynamic_states.size(),
+      .pDynamicStates = dynamic_states.data()};
+
+  vk::PipelineLayoutCreateInfo pipeline_layout_info{};
+
+  c.layout = c.device.createPipelineLayout(pipeline_layout_info);
+
+  vk::GraphicsPipelineCreateInfo pipeline_info{
+      .stageCount = 2,
+      .pStages = shader_stages.data(),
+      .pVertexInputState = &vert_in_info,
+      .pInputAssemblyState = &in_assembly,
+      .pViewportState = &viewport_state,
+      .pRasterizationState = &rasterizer,
+      .pMultisampleState = &multisampling,
+      .pColorBlendState = &colorblending,
+      .pDynamicState = &dynamicState,
+      .layout = *c.layout,
+      .renderPass = *c.pass,
+      .subpass = 0};
+
+  c.pipeline = c.device.createGraphicsPipeline(nullptr, pipeline_info);
+}
+
+void setupRenderpass(Context &c, vk::Format format) {
+  using enum vk::SampleCountFlagBits;
+  using enum vk::ImageLayout;
+  using l = vk::AttachmentLoadOp;
+  using s = vk::AttachmentStoreOp;
+
+  auto color = vk::AttachmentDescription{.format = format,
+                                         .samples = e1,
+                                         .loadOp = l::eClear,
+                                         .storeOp = s::eStore,
+                                         .stencilLoadOp = l::eDontCare,
+                                         .stencilStoreOp = s::eDontCare,
+                                         .initialLayout = eUndefined,
+                                         .finalLayout = ePresentSrcKHR};
+  auto colorAttachmentRef = vk::AttachmentReference{
+      .attachment = 0, .layout = vk::ImageLayout::eColorAttachmentOptimal};
+  auto subpass = vk::SubpassDescription{
+      .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
+      .colorAttachmentCount = 1,
+      .pColorAttachments = &colorAttachmentRef};
+  auto pass_info = vk::RenderPassCreateInfo{.attachmentCount = 1,
+                                            .pAttachments = &color,
+                                            .subpassCount = 1,
+                                            .pSubpasses = &subpass};
+  c.pass = c.device.createRenderPass(pass_info);
 }
 
 } // namespace
 
 Context::Context(GLFWwin &&win)
-    : window(std::move(win)), context{}, instance(setup_instance(context)),
-      debug_messager(setup_debug(instance)),
-      surface(setup_surface(window, instance)), device(nullptr),
-      swapchain(nullptr) {
-  auto device = setup_device(*this);
-  setup_swapchain(*this, device);
+    : window(std::move(win)), context{}, instance(setupInstance(context)),
+      debug_messager(setupDebug(instance)),
+      surface(setupSurface(window, instance)), device(nullptr),
+      swapchain(nullptr), pass(nullptr), layout(nullptr), pipeline{nullptr} {
+  auto device = setupDevice(*this);
+  auto format = setupSwapchain(*this, device);
+  setupRenderpass(*this, format);
+  setupShaderAndPipeline(*this);
 }
 Context setupVk(GLFWwin &&win) { return Context(std::move(win)); }
