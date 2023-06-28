@@ -4,8 +4,6 @@
 
 #include "context.hpp"
 #include "glfwsetup.hpp"
-#include "renderer.hpp"
-#include "vk.hpp"
 
 namespace {
 
@@ -18,8 +16,7 @@ float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 
 int main() {
   {
-    auto vk = setupVk(setup_window());
-    auto render = setupRenderer(vk);
+    auto vk = Context(setup_window());
     while (!glfwWindowShouldClose(vk.window.handle)) {
       processInput(vk.window.handle);
 

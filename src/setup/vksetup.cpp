@@ -18,16 +18,9 @@
 #include "glfwsetup.hpp"
 #include "queues.hpp"
 #include "validation.hpp"
-#include "vk.hpp"
 #include "vkformat.hpp"
 
 namespace {
-struct Indicies {
-  int graphics = -1, transfer = -1, present = -1;
-  bool isComplete() const noexcept {
-    return graphics != -1 || transfer != -1 || present != -1;
-  }
-};
 
 struct SwapChainSupportDetails {
   vk::SurfaceCapabilitiesKHR capabilities;
@@ -230,6 +223,7 @@ vk::PhysicalDevice setupDevice(Context &c) {
       break;
     }
   }
+  c.indicies = indicies;
   auto &[graphics, present, transfer] = indicies;
 
   if (!chosen)
@@ -410,18 +404,48 @@ void setupRenderpass(Context &c, vk::Format format) {
                                             .pSubpasses = &subpass};
   c.pass = c.device.createRenderPass(pass_info);
 }
+void setupViews(Context &c) {
+  std::vector<vk::Image> images = c.swapchain.getImages();
+  c.views.reserve(images.size());
+  c.framebuffer.reserve(images.size());
+  for (int i = 0; i != images.size(); i++) {
+    c.views.push_back(c.device.createImageView(vk::ImageViewCreateInfo{
+        .image = images[i],
+        .viewType = vk::ImageViewType::e2D,
+        .format = c.format,
+        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                             .baseMipLevel = 0,
+                             .levelCount = 1,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1}}));
+    c.framebuffer.push_back(c.device.createFramebuffer(
+        vk::FramebufferCreateInfo{.renderPass = *c.pass,
+                                  .attachmentCount = 1,
+                                  .pAttachments = &*c.views.back(),
+                                  .width = c.swapchain_extent.width,
+                                  .height = c.swapchain_extent.height,
+                                  .layers = 1}));
+  }
+}
 
+void setupPool(Context &c) {
+  c.pool = c.device.createCommandPool(
+      {.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+       .queueFamilyIndex = static_cast<uint32_t>(c.indicies.graphics)});
+}
 } // namespace
 
 Context::Context(GLFWwin &&win)
     : window(std::move(win)), context{}, instance(setupInstance(context)),
       debug_messager(setupDebug(instance)),
       surface(setupSurface(window, instance)), device(nullptr),
-      swapchain(nullptr), pass(nullptr), layout(nullptr), pipeline{nullptr} {
+      swapchain(nullptr), pass(nullptr),
+      layout(nullptr), pipeline{nullptr}, pool{nullptr} {
   auto device = setupDevice(*this);
   auto format = setupSwapchain(*this, device);
   setupRenderpass(*this, format);
   this->format = format;
   setupShaderAndPipeline(*this);
+  setupViews(*this);
+  setupPool(*this);
 }
-Context setupVk(GLFWwin &&win) { return Context(std::move(win)); }

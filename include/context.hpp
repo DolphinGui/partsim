@@ -3,8 +3,18 @@
 #include "queues.hpp"
 #include <vulkan/vulkan_raii.hpp>
 
+struct Indicies {
+  int graphics = -1, transfer = -1, present = -1;
+  bool isComplete() const noexcept {
+    return graphics != -1 || transfer != -1 || present != -1;
+  }
+};
+
 struct Context {
   Context(GLFWwin &&);
+
+  std::vector<vk::CommandBuffer> getCommands();
+
   GLFWwin window;
 
   vk::raii::Context context;
@@ -19,4 +29,8 @@ struct Context {
   vk::raii::Pipeline pipeline;
   vk::Extent2D swapchain_extent;
   vk::Format format;
+  Indicies indicies;
+  std::vector<vk::raii::ImageView> views;
+  std::vector<vk::raii::Framebuffer> framebuffer;
+  vk::raii::CommandPool pool;
 };

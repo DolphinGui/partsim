@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <vulkan/vulkan.hpp>
 
-namespace {
-
 constexpr inline std::array validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
 inline bool check_validation_support() {
@@ -38,5 +36,3 @@ constexpr inline bool enableValidation =
 #else
     true;
 #endif
-
-} // namespace
