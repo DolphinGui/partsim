@@ -18,4 +18,5 @@ struct Context {
   vk::raii::PipelineLayout layout;
   vk::raii::Pipeline pipeline;
   vk::Extent2D swapchain_extent;
+  vk::Format format;
 };

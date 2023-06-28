@@ -18,8 +18,8 @@
 #include "glfwsetup.hpp"
 #include "queues.hpp"
 #include "validation.hpp"
-#include "vkformat.hpp"
 #include "vk.hpp"
+#include "vkformat.hpp"
 
 namespace {
 struct Indicies {
@@ -302,9 +302,7 @@ vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
       .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
       .presentMode = present_mode,
       .clipped = true};
-
-  auto sw = (*c.device).createSwapchainKHR(info);
-  (*c.device).destroySwapchainKHR(sw);
+  c.swapchain = c.device.createSwapchainKHR(info);
   return surface_format.format;
 }
 
@@ -320,14 +318,15 @@ void setupShaderAndPipeline(Context &c) {
       vk::ShaderModuleCreateInfo{.codeSize = build_shaders_vert_spv_len,
                                  .pCode = reinterpret_cast<const uint32_t *>(
                                      &build_shaders_vert_spv)});
+
   std::array shader_stages = {vk::PipelineShaderStageCreateInfo{
-                                 .stage = vk::ShaderStageFlagBits::eVertex,
-                                 .module = *vert,
-                                 .pName = "main"},
-                             vk::PipelineShaderStageCreateInfo{
-                                 .stage = vk::ShaderStageFlagBits::eFragment,
-                                 .module = *frag,
-                                 .pName = "main"}};
+                                  .stage = vk::ShaderStageFlagBits::eVertex,
+                                  .module = *vert,
+                                  .pName = "main"},
+                              vk::PipelineShaderStageCreateInfo{
+                                  .stage = vk::ShaderStageFlagBits::eFragment,
+                                  .module = *frag,
+                                  .pName = "main"}};
 
   std::array dynamic_states = {vk::DynamicState::eViewport,
                                vk::DynamicState::eScissor};
@@ -338,7 +337,7 @@ void setupShaderAndPipeline(Context &c) {
       .topology = vk::PrimitiveTopology::eTriangleList};
 
   vk::PipelineViewportStateCreateInfo viewport_state{.viewportCount = 1,
-                                                    .scissorCount = 1};
+                                                     .scissorCount = 1};
 
   vk::PipelineRasterizationStateCreateInfo rasterizer{
       .polygonMode = vk::PolygonMode::eFill,
@@ -359,7 +358,7 @@ void setupShaderAndPipeline(Context &c) {
       .pAttachments = &colorblend_attachment};
 
   std::array dyn_states = {vk::DynamicState::eViewport,
-                              vk::DynamicState::eScissor};
+                           vk::DynamicState::eScissor};
   vk::PipelineDynamicStateCreateInfo dynamicState{
       .dynamicStateCount = dynamic_states.size(),
       .pDynamicStates = dynamic_states.data()};
@@ -422,6 +421,7 @@ Context::Context(GLFWwin &&win)
   auto device = setupDevice(*this);
   auto format = setupSwapchain(*this, device);
   setupRenderpass(*this, format);
+  this->format = format;
   setupShaderAndPipeline(*this);
 }
 Context setupVk(GLFWwin &&win) { return Context(std::move(win)); }

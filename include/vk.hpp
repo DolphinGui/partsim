@@ -1,6 +1,9 @@
 #pragma once
 
-#include "context.hpp"
 #include "glfwsetup.hpp"
 
-Context setupVk(GLFWwin&&);
+struct Context;
+struct Renderer;
+
+Context setupVk(GLFWwin &&);
+Renderer setupRenderer(Context &c);
