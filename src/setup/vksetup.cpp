@@ -274,6 +274,7 @@ vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
       querySwapchainSupport(*c.surface, physicalDevice);
   vk::SurfaceFormatKHR surface_format =
       chooseSwapSurfaceFormat(swapchain_support.formats);
+  c.format = surface_format.format;
   vk::PresentModeKHR present_mode =
       chooseSwapPresentMode(swapchain_support.presentModes);
   c.swapchain_extent = chooseSwapExtent(c, swapchain_support.capabilities);
@@ -398,10 +399,21 @@ void setupRenderpass(Context &c, vk::Format format) {
       .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
       .colorAttachmentCount = 1,
       .pColorAttachments = &colorAttachmentRef};
+  using enum vk::PipelineStageFlagBits;
+  vk::SubpassDependency dependency{
+      .srcSubpass = VK_SUBPASS_EXTERNAL,
+      .dstSubpass = 0,
+      .srcStageMask = eColorAttachmentOutput,
+      .dstStageMask = eColorAttachmentOutput,
+      .srcAccessMask = {},
+      .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite};
+
   auto pass_info = vk::RenderPassCreateInfo{.attachmentCount = 1,
                                             .pAttachments = &color,
                                             .subpassCount = 1,
-                                            .pSubpasses = &subpass};
+                                            .pSubpasses = &subpass,
+                                            .dependencyCount = 1,
+                                            .pDependencies = &dependency};
   c.pass = c.device.createRenderPass(pass_info);
 }
 void setupViews(Context &c) {
@@ -440,14 +452,19 @@ Context::Context(GLFWwin &&win)
       debug_messager(setupDebug(instance)),
       surface(setupSurface(window, instance)), device(nullptr),
       swapchain(nullptr), pass(nullptr),
-      layout(nullptr), pipeline{nullptr}, pool{nullptr} {
-  auto device = setupDevice(*this);
-  auto format = setupSwapchain(*this, device);
+      layout(nullptr), pipeline{nullptr}, pool{nullptr},
+      image_available_sem(nullptr), render_done_sem(nullptr),
+      inflight_fen(nullptr) {
+  auto phys = setupDevice(*this);
+  auto format = setupSwapchain(*this, phys);
   setupRenderpass(*this, format);
-  this->format = format;
   setupShaderAndPipeline(*this);
   setupViews(*this);
   setupPool(*this);
+  image_available_sem = device.createSemaphore({});
+  render_done_sem = device.createSemaphore({});
+  inflight_fen =
+      device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
 }
 
 std::vector<vk::raii::CommandBuffer>
@@ -455,3 +472,4 @@ Context::getCommands(uint32_t number, vk::CommandBufferLevel level) {
   return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
       .commandPool = *pool, .level = level, .commandBufferCount = number});
 }
+Context::~Context(){}

@@ -2,16 +2,23 @@
 #include <cstddef>
 #include <fmt/core.h>
 #include <span>
+#include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_structs.hpp>
+#include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
 #include "glfwsetup.hpp"
 
 namespace {
+
+void vkassert(vk::Result r) {
+  if (r != vk::Result::eSuccess)
+    throw std::runtime_error(vk::to_string(r));
+}
 
 void processInput(GLFWwindow *window) {
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -41,7 +48,6 @@ void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
 void render(Context &c, std::span<vk::raii::CommandBuffer> buffers, int index) {
   for (auto &buffer : buffers) {
     buffer.begin({});
-
     vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
     buffer.beginRenderPass({.renderPass = *c.pass,
                             .framebuffer = *c.framebuffers[index],
@@ -49,12 +55,48 @@ void render(Context &c, std::span<vk::raii::CommandBuffer> buffers, int index) {
                             .clearValueCount = 1,
                             .pClearValues = &clearColor},
                            vk::SubpassContents::eInline);
+    buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *c.pipeline);
     setScissorViewport(c, *buffer);
     buffer.draw(3, 1, 0, 0);
+    buffer.endRenderPass();
     buffer.end();
   }
 }
 float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
+
+void draw(Context &c, std::span<vk::raii::CommandBuffer> buffers) {
+  vkassert(
+      c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
+  c.device.resetFences(std::array{*c.inflight_fen});
+
+  auto [result, imageIndex] =
+      c.swapchain.acquireNextImage(UINT64_MAX, *c.image_available_sem);
+  c.pool.reset();
+  render(c, buffers, imageIndex);
+
+  vk::Semaphore waitSemaphores[] = {*c.image_available_sem};
+  vk::PipelineStageFlags waitStages[] = {
+      vk::PipelineStageFlagBits::eColorAttachmentOutput};
+  vk::Semaphore signalSemaphores[] = {*c.render_done_sem};
+
+  c.queues.render().submit({{.waitSemaphoreCount = 1,
+                             .pWaitSemaphores = waitSemaphores,
+                             .pWaitDstStageMask = waitStages,
+                             .commandBufferCount = 1,
+                             .pCommandBuffers = &*buffers.front(),
+                             .signalSemaphoreCount = 1,
+                             .pSignalSemaphores = signalSemaphores}},
+                           *c.inflight_fen);
+
+  vk::PresentInfoKHR presentInfo{};
+  vk::SwapchainKHR swapChains[] = {*c.swapchain};
+  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.pWaitSemaphores = signalSemaphores;
+  presentInfo.swapchainCount = 1;
+  presentInfo.pSwapchains = swapChains;
+  presentInfo.pImageIndices = &imageIndex;
+  vkassert(c.queues.render().presentKHR(presentInfo));
+}
 } // namespace
 
 int main() {
@@ -63,10 +105,11 @@ int main() {
     auto cmdBuffers = vk.getCommands(1);
     while (!glfwWindowShouldClose(vk.window.handle)) {
       processInput(vk.window.handle);
-
+      draw(vk, cmdBuffers);
       glfwSwapBuffers(vk.window.handle);
       glfwPollEvents();
     }
+    vk.device.waitIdle();
   }
   glfwTerminate();
   return 0;

@@ -13,6 +13,7 @@ struct Indicies {
 
 struct Context {
   Context(GLFWwin &&);
+  ~Context();
 
   std::vector<vk::raii::CommandBuffer>
   getCommands(uint32_t number,
@@ -36,4 +37,7 @@ struct Context {
   std::vector<vk::raii::ImageView> views;
   std::vector<vk::raii::Framebuffer> framebuffers;
   vk::raii::CommandPool pool;
+
+  vk::raii::Semaphore image_available_sem, render_done_sem;
+  vk::raii::Fence inflight_fen;
 };
