@@ -34,6 +34,6 @@ struct Context {
   vk::Format format;
   Indicies indicies;
   std::vector<vk::raii::ImageView> views;
-  std::vector<vk::raii::Framebuffer> framebuffer;
+  std::vector<vk::raii::Framebuffer> framebuffers;
   vk::raii::CommandPool pool;
 };

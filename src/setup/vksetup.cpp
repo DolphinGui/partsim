@@ -407,7 +407,7 @@ void setupRenderpass(Context &c, vk::Format format) {
 void setupViews(Context &c) {
   std::vector<vk::Image> images = c.swapchain.getImages();
   c.views.reserve(images.size());
-  c.framebuffer.reserve(images.size());
+  c.framebuffers.reserve(images.size());
   for (int i = 0; i != images.size(); i++) {
     c.views.push_back(c.device.createImageView(vk::ImageViewCreateInfo{
         .image = images[i],
@@ -418,7 +418,7 @@ void setupViews(Context &c) {
                              .levelCount = 1,
                              .baseArrayLayer = 0,
                              .layerCount = 1}}));
-    c.framebuffer.push_back(c.device.createFramebuffer(
+    c.framebuffers.push_back(c.device.createFramebuffer(
         vk::FramebufferCreateInfo{.renderPass = *c.pass,
                                   .attachmentCount = 1,
                                   .pAttachments = &*c.views.back(),
