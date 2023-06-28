@@ -11,7 +11,7 @@
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
-#include "glfwsetup.hpp"
+#include "win_setup.hpp"
 
 namespace {
 
@@ -20,10 +20,10 @@ void vkassert(vk::Result r) {
     throw std::runtime_error(vk::to_string(r));
 }
 
-void processInput(GLFWwindow *window) {
-  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-    glfwSetWindowShouldClose(window, true);
-}
+// void processInput(GLFWwindow *window) {
+//   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+//     glfwSetWindowShouldClose(window, true);
+// }
 
 void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
   vk::Viewport viewport{.x = 0,
@@ -101,10 +101,10 @@ void draw(Context &c, std::span<vk::raii::CommandBuffer> buffers) {
 
 int main() {
   {
-    auto vk = Context(setup_window());
+    auto vk = Context(Window("triangles!", {.width = 600, .height = 800}));
     auto cmdBuffers = vk.getCommands(1);
     while (!glfwWindowShouldClose(vk.window.handle)) {
-      processInput(vk.window.handle);
+      // processInput(vk.window.handle);
       draw(vk, cmdBuffers);
       glfwSwapBuffers(vk.window.handle);
       glfwPollEvents();

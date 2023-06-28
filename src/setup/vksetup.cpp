@@ -15,10 +15,10 @@
 #include "build/frag.hpp"
 #include "build/vert.hpp"
 #include "context.hpp"
-#include "glfwsetup.hpp"
 #include "queues.hpp"
 #include "validation.hpp"
 #include "vkformat.hpp"
+#include "win_setup.hpp"
 
 namespace {
 
@@ -184,11 +184,10 @@ vk::Extent2D chooseSwapExtent(Context &c,
       std::numeric_limits<uint32_t>::max()) {
     return capabilities.currentExtent;
   } else {
-    int width, height;
-    glfwGetFramebufferSize(c.window.handle, &width, &height);
+    auto ext = c.window.getBufferSize();
 
-    vk::Extent2D extent = {static_cast<uint32_t>(width),
-                           static_cast<uint32_t>(height)};
+    vk::Extent2D extent = {static_cast<uint32_t>(ext.width),
+                           static_cast<uint32_t>(ext.height)};
 
     extent.width = std::clamp(extent.width, capabilities.minImageExtent.width,
                               capabilities.maxImageExtent.width);
@@ -259,14 +258,6 @@ vk::PhysicalDevice setupDevice(Context &c) {
   c.queues.set_graphics(c.device.getQueue(graphics, 0).release());
   c.queues.set_transfer(c.device.getQueue(transfer, 0).release());
   return **chosen;
-}
-
-vk::raii::SurfaceKHR setupSurface(GLFWwin &window,
-                                  vk::raii::Instance &instance) {
-  auto info = vk::WaylandSurfaceCreateInfoKHR{
-      .display = glfwGetWaylandDisplay(),
-      .surface = glfwGetWaylandWindow(window.handle)};
-  return instance.createWaylandSurfaceKHR(info);
 }
 
 vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
@@ -447,10 +438,10 @@ void setupPool(Context &c) {
 }
 } // namespace
 
-Context::Context(GLFWwin &&win)
+Context::Context(Window &&win)
     : window(std::move(win)), context{}, instance(setupInstance(context)),
       debug_messager(setupDebug(instance)),
-      surface(setupSurface(window, instance)), device(nullptr),
+      surface(instance, win.getSurface(*instance)), device(nullptr),
       swapchain(nullptr), pass(nullptr),
       layout(nullptr), pipeline{nullptr}, pool{nullptr},
       image_available_sem(nullptr), render_done_sem(nullptr),
@@ -472,4 +463,4 @@ Context::getCommands(uint32_t number, vk::CommandBufferLevel level) {
   return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
       .commandPool = *pool, .level = level, .commandBufferCount = number});
 }
-Context::~Context(){}
+Context::~Context() {}
