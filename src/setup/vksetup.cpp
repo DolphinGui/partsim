@@ -19,7 +19,7 @@
 #include "queues.hpp"
 #include "validation.hpp"
 #include "vkformat.hpp"
-#include "vksetup.hpp"
+#include "vk.hpp"
 
 namespace {
 struct Indicies {
