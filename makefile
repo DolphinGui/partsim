@@ -2,10 +2,10 @@
 INCLUDE = -Iinclude -I.
 FLAGS = -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
-`sdl2-config --cflags` -fno-omit-frame-pointer -fsanitize=address
+`sdl2-config --cflags` -fno-omit-frame-pointer
 CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS)
 CFLAGS = -std=c11 $(INCLUDE) $(FLAGS)
-LDFLAGS = -lfmt -lvulkan `sdl2-config --libs` -lglfw -fsanitize=address
+LDFLAGS = -lfmt -lvulkan `sdl2-config --libs` -lglfw
 CC = clang
 CXX = clang++
 C_SRCS =  $(shell find src/ -type f -name '*.c')

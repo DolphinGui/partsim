@@ -20,16 +20,14 @@ void vkassert(vk::Result r) {
 bool processInput() {
   SDL_Event event;
   SDL_PollEvent(&event);
-  return event.type == SDL_QUIT;
+  return event.type == SDL_QUIT ||
+         (event.type == SDL_KEYDOWN &&
+          event.key.keysym.scancode == SDL_SCANCODE_C &&
+          event.key.keysym.mod & KMOD_CTRL);
 }
 
 void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
-  vk::Viewport viewport{.x = 0,
-                        .y = 0,
-                        .width = static_cast<float>(c.swapchain_extent.width),
-                        .height = static_cast<float>(c.swapchain_extent.height),
-                        .minDepth = 0,
-                        .maxDepth = 1.0};
+
   buffer.setViewport(
       0, std::array{vk::Viewport{
              .x = 0,
