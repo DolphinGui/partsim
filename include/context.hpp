@@ -15,9 +15,10 @@ struct Context {
   Context(Window &&);
   ~Context();
 
-  std::vector<vk::raii::CommandBuffer>
+  std::vector<vk::CommandBuffer>
   getCommands(uint32_t number,
               vk::CommandBufferLevel level = vk::CommandBufferLevel::ePrimary);
+  void recreateSwapchain();
 
   Window window;
 
@@ -31,13 +32,15 @@ struct Context {
   vk::raii::RenderPass pass;
   vk::raii::PipelineLayout layout;
   vk::raii::Pipeline pipeline;
-  vk::Extent2D swapchain_extent;
-  vk::Format format;
-  Indicies indicies;
   std::vector<vk::raii::ImageView> views;
   std::vector<vk::raii::Framebuffer> framebuffers;
   vk::raii::CommandPool pool;
 
   vk::raii::Semaphore image_available_sem, render_done_sem;
   vk::raii::Fence inflight_fen;
+
+  vk::Extent2D swapchain_extent;
+  vk::Format format;
+  Indicies indicies;
+  vk::PhysicalDevice phys;
 };

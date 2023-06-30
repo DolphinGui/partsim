@@ -1,7 +1,8 @@
 #pragma once
-#include <SDL2/SDL.h>
+#include <SDL2/SDL_video.h>
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <vulkan/vulkan.hpp>
 
@@ -13,12 +14,21 @@ struct Window {
   Window(std::string_view title, Extent size);
   ~Window();
 
-  Window(Window &&rhs);
-  Window &operator=(Window &&rhs);
+  void swap(Window &other) {
+    SDL_Window *tmp = other.handle;
+    other.handle = handle;
+    handle = tmp;
+  }
+  Window(Window &&rhs) { swap(rhs); }
+  Window &operator=(Window &&rhs) {
+    swap(rhs);
+    return *this;
+  }
 
-  bool shouldClose();
   Extent getBufferSize();
 
   vk::SurfaceKHR getSurface(vk::Instance);
-  SDL_Window *handle;
+  std::vector<const char*> getVkExtentions();
+
+  SDL_Window *handle = nullptr;
 };

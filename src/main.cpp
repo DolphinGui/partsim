@@ -1,14 +1,11 @@
-#include <GLFW/glfw3.h>
+#include <SDL2/SDL_events.h>
 #include <cstddef>
 #include <fmt/core.h>
 #include <span>
 #include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_structs.hpp>
-#include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
 #include "win_setup.hpp"
@@ -20,10 +17,11 @@ void vkassert(vk::Result r) {
     throw std::runtime_error(vk::to_string(r));
 }
 
-// void processInput(GLFWwindow *window) {
-//   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-//     glfwSetWindowShouldClose(window, true);
-// }
+bool processInput() {
+  SDL_Event event;
+  SDL_PollEvent(&event);
+  return event.type == SDL_QUIT;
+}
 
 void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
   vk::Viewport viewport{.x = 0,
@@ -45,26 +43,27 @@ void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
                                              .extent = c.swapchain_extent}});
 }
 
-void render(Context &c, std::span<vk::raii::CommandBuffer> buffers, int index) {
+void render(Context &c, std::span<vk::CommandBuffer> buffers, int index) {
   for (auto &buffer : buffers) {
-    buffer.begin({});
-    vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
-    buffer.beginRenderPass({.renderPass = *c.pass,
-                            .framebuffer = *c.framebuffers[index],
-                            .renderArea = {{0, 0}, c.swapchain_extent},
-                            .clearValueCount = 1,
-                            .pClearValues = &clearColor},
-                           vk::SubpassContents::eInline);
-    buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *c.pipeline);
-    setScissorViewport(c, *buffer);
-    buffer.draw(3, 1, 0, 0);
-    buffer.endRenderPass();
+    vk::CommandBufferBeginInfo info{};
+    vkassert(buffer.begin(&info));
+    // vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f,
+    // 0.0f, 1.0f}}}; buffer.beginRenderPass({.renderPass = *c.pass,
+    //                         .framebuffer = *c.framebuffers[index],
+    //                         .renderArea = {{0, 0}, c.swapchain_extent},
+    //                         .clearValueCount = 1,
+    //                         .pClearValues = &clearColor},
+    //                        vk::SubpassContents::eInline);
+    // buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *c.pipeline);
+    // setScissorViewport(c, buffer);
+    // buffer.draw(3, 1, 0, 0);
+    // buffer.endRenderPass();
     buffer.end();
   }
 }
 float vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 
-void draw(Context &c, std::span<vk::raii::CommandBuffer> buffers) {
+void draw(Context &c, std::span<vk::CommandBuffer> buffers) {
   vkassert(
       c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
   c.device.resetFences(std::array{*c.inflight_fen});
@@ -78,15 +77,14 @@ void draw(Context &c, std::span<vk::raii::CommandBuffer> buffers) {
   vk::PipelineStageFlags waitStages[] = {
       vk::PipelineStageFlagBits::eColorAttachmentOutput};
   vk::Semaphore signalSemaphores[] = {*c.render_done_sem};
-
-  c.queues.render().submit({{.waitSemaphoreCount = 1,
-                             .pWaitSemaphores = waitSemaphores,
-                             .pWaitDstStageMask = waitStages,
-                             .commandBufferCount = 1,
-                             .pCommandBuffers = &*buffers.front(),
-                             .signalSemaphoreCount = 1,
-                             .pSignalSemaphores = signalSemaphores}},
-                           *c.inflight_fen);
+  std::array submit = {vk::SubmitInfo{.waitSemaphoreCount = 1,
+                                      .pWaitSemaphores = waitSemaphores,
+                                      .pWaitDstStageMask = waitStages,
+                                      .commandBufferCount = 1,
+                                      .pCommandBuffers = buffers.data(),
+                                      .signalSemaphoreCount = 1,
+                                      .pSignalSemaphores = signalSemaphores}};
+  c.queues.render().submit(submit, *c.inflight_fen);
 
   vk::PresentInfoKHR presentInfo{};
   vk::SwapchainKHR swapChains[] = {*c.swapchain};
@@ -100,17 +98,11 @@ void draw(Context &c, std::span<vk::raii::CommandBuffer> buffers) {
 } // namespace
 
 int main() {
-  {
-    auto vk = Context(Window("triangles!", {.width = 600, .height = 800}));
-    auto cmdBuffers = vk.getCommands(1);
-    while (!glfwWindowShouldClose(vk.window.handle)) {
-      // processInput(vk.window.handle);
-      draw(vk, cmdBuffers);
-      glfwSwapBuffers(vk.window.handle);
-      glfwPollEvents();
-    }
-    vk.device.waitIdle();
+  auto vk = Context(Window("triangles!", {.width = 600, .height = 800}));
+  auto cmdBuffers = vk.getCommands(1);
+  while (!processInput()) {
+    draw(vk, cmdBuffers);
   }
-  glfwTerminate();
+  vk.device.waitIdle();
   return 0;
 }
