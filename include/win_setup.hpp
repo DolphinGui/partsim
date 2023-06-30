@@ -14,21 +14,21 @@ struct Window {
   Window(std::string_view title, Extent size);
   ~Window();
 
-  void swap(Window &other) {
-    SDL_Window *tmp = other.handle;
-    other.handle = handle;
-    handle = tmp;
+  Window(Window &&rhs) {
+    handle = rhs.handle;
+    rhs.moved_from = true;
   }
-  Window(Window &&rhs) { swap(rhs); }
   Window &operator=(Window &&rhs) {
-    swap(rhs);
+    handle = rhs.handle;
+    rhs.moved_from = true;
     return *this;
   }
 
   Extent getBufferSize();
 
   vk::SurfaceKHR getSurface(vk::Instance);
-  std::vector<const char*> getVkExtentions();
+  std::vector<const char *> getVkExtentions();
 
   SDL_Window *handle = nullptr;
+  bool moved_from = false;
 };

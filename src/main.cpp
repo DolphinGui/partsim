@@ -47,17 +47,17 @@ void render(Context &c, std::span<vk::CommandBuffer> buffers, int index) {
   for (auto &buffer : buffers) {
     vk::CommandBufferBeginInfo info{};
     vkassert(buffer.begin(&info));
-    // vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f,
-    // 0.0f, 1.0f}}}; buffer.beginRenderPass({.renderPass = *c.pass,
-    //                         .framebuffer = *c.framebuffers[index],
-    //                         .renderArea = {{0, 0}, c.swapchain_extent},
-    //                         .clearValueCount = 1,
-    //                         .pClearValues = &clearColor},
-    //                        vk::SubpassContents::eInline);
-    // buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *c.pipeline);
-    // setScissorViewport(c, buffer);
-    // buffer.draw(3, 1, 0, 0);
-    // buffer.endRenderPass();
+    vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
+    buffer.beginRenderPass({.renderPass = *c.pass,
+                            .framebuffer = *c.framebuffers[index],
+                            .renderArea = {{0, 0}, c.swapchain_extent},
+                            .clearValueCount = 1,
+                            .pClearValues = &clearColor},
+                           vk::SubpassContents::eInline);
+    buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *c.pipeline);
+    setScissorViewport(c, buffer);
+    buffer.draw(3, 1, 0, 0);
+    buffer.endRenderPass();
     buffer.end();
   }
 }

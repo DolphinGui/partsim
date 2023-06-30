@@ -22,8 +22,10 @@ vk::SurfaceKHR Window::getSurface(vk::Instance instance) {
 }
 
 Window::~Window() {
-  SDL_DestroyWindow(handle);
-  SDL_Quit();
+  if (!moved_from) {
+    SDL_DestroyWindow(handle);
+    SDL_Quit();
+  }
 }
 
 Extent Window::getBufferSize() {

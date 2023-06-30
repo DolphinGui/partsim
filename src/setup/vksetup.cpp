@@ -1,5 +1,3 @@
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 #include <SDL2/SDL_vulkan.h>
 #include <cstdio>
 #include <fmt/core.h>
@@ -9,9 +7,7 @@
 #include <utility>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_raii.hpp>
-#include <vulkan/vulkan_structs.hpp>
+#include <vulkan/vulkan_to_string.hpp>
 
 #include "build/frag.hpp"
 #include "build/vert.hpp"
@@ -45,20 +41,6 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
 
   return VK_FALSE;
 }
-inline std::vector<const char *> getExtentions() {
-  uint32_t glfwExtensionCount = 0;
-  const char **glfwExtensions;
-  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-  std::vector<const char *> extensions(glfwExtensions,
-                                       glfwExtensions + glfwExtensionCount);
-
-  if (enableValidation) {
-    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-  }
-
-  return extensions;
-}
 
 vk::raii::Instance setupInstance(vk::raii::Context &context, Window &win) {
 
@@ -72,23 +54,17 @@ vk::raii::Instance setupInstance(vk::raii::Context &context, Window &win) {
                               .engineVersion = VK_MAKE_VERSION(1, 0, 0),
                               .apiVersion = VK_API_VERSION_1_0};
 
-  auto sdl_ext = win.getVkExtentions();
-  sdl_ext.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-  std::array layer = {VK_EXT_DEBUG_REPORT_EXTENSION_NAME};
+  auto extensions = win.getVkExtentions();
+  extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-  vk::InstanceCreateInfo createInfo{.flags = {},
-                                    .pApplicationInfo = &appInfo,
-                                    .enabledLayerCount = 0,
-                                    .ppEnabledLayerNames = nullptr,
-                                    .enabledExtensionCount =
-                                        static_cast<uint32_t>(sdl_ext.size()),
-                                    .ppEnabledExtensionNames = sdl_ext.data()};
+  vk::InstanceCreateInfo createInfo{
+      .flags = {},
+      .pApplicationInfo = &appInfo,
+      .enabledLayerCount = validationLayers.size(),
+      .ppEnabledLayerNames = validationLayers.data(),
+      .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
+      .ppEnabledExtensionNames = extensions.data()};
 
-  if (enableValidation) {
-    createInfo.enabledLayerCount =
-        static_cast<uint32_t>(validationLayers.size());
-    createInfo.ppEnabledLayerNames = validationLayers.data();
-  }
   return vk::raii::Instance(context, vk::createInstance(createInfo));
 }
 
@@ -194,10 +170,10 @@ vk::Extent2D chooseSwapExtent(Context &c,
       std::numeric_limits<uint32_t>::max()) {
     return capabilities.currentExtent;
   } else {
-    auto ext = c.window.getBufferSize();
+    auto [width, height] = c.window.getBufferSize();
 
-    vk::Extent2D extent = {static_cast<uint32_t>(ext.width),
-                           static_cast<uint32_t>(ext.height)};
+    vk::Extent2D extent = {static_cast<uint32_t>(width),
+                           static_cast<uint32_t>(height)};
 
     extent.width = std::clamp(extent.width, capabilities.minImageExtent.width,
                               capabilities.maxImageExtent.width);
@@ -219,7 +195,7 @@ std::pair<bool, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
           indices};
 }
 
-vk::raii::Device setupDevice(Context &c) {
+vk::PhysicalDevice setupDevice(Context &c) {
   auto phys_devices = vk::raii::PhysicalDevices(c.instance);
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
@@ -260,17 +236,24 @@ vk::raii::Device setupDevice(Context &c) {
     createInfo.enabledLayerCount =
         static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
+  } else {
+    createInfo.enabledLayerCount = 0;
   }
-  auto device = vk::raii::Device(*chosen, createInfo);
-  c.queues.set_graphics(device.getQueue(graphics, 0).release());
-  c.queues.set_transfer(device.getQueue(transfer, 0).release());
-  c.phys = **chosen;
-  return vk::raii::Device(*chosen, createInfo);
+
+  c.device = vk::raii::Device(*chosen, createInfo);
+  c.queues.set_graphics(c.device.getQueue(graphics, 0).release());
+  c.queues.set_transfer(c.device.getQueue(transfer, 0).release());
+  return **chosen;
 }
 
-vk::raii::SwapchainKHR setupSwapchain(Context &c) {
+vk::raii::SurfaceKHR setupSurface(Window &window,
+                                  vk::raii::Instance &instance) {
+  return {instance, window.getSurface(*instance)};
+}
+
+vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
   SwapChainSupportDetails swapchain_support =
-      querySwapchainSupport(*c.surface, c.phys);
+      querySwapchainSupport(*c.surface, physicalDevice);
   vk::SurfaceFormatKHR surface_format =
       chooseSwapSurfaceFormat(swapchain_support.formats);
   c.format = surface_format.format;
@@ -283,19 +266,21 @@ vk::raii::SwapchainKHR setupSwapchain(Context &c) {
     image_count = swapchain_support.capabilities.maxImageCount;
   }
 
-  return c.device.createSwapchainKHR(
-      {.surface = *c.surface,
-       .minImageCount = image_count,
-       .imageFormat = surface_format.format,
-       .imageColorSpace = surface_format.colorSpace,
-       .imageExtent = c.swapchain_extent,
-       .imageArrayLayers = 1,
-       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
-       .imageSharingMode = vk::SharingMode::eExclusive,
-       .preTransform = swapchain_support.capabilities.currentTransform,
-       .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-       .presentMode = present_mode,
-       .clipped = true});
+  auto info = vk::SwapchainCreateInfoKHR{
+      .surface = *c.surface,
+      .minImageCount = image_count,
+      .imageFormat = surface_format.format,
+      .imageColorSpace = surface_format.colorSpace,
+      .imageExtent = c.swapchain_extent,
+      .imageArrayLayers = 1,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+      .imageSharingMode = vk::SharingMode::eExclusive,
+      .preTransform = swapchain_support.capabilities.currentTransform,
+      .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+      .presentMode = present_mode,
+      .clipped = true};
+  c.swapchain = c.device.createSwapchainKHR(info);
+  return surface_format.format;
 }
 
 void setupShaderAndPipeline(Context &c) {
@@ -346,12 +331,11 @@ void setupShaderAndPipeline(Context &c) {
       .attachmentCount = 1,
       .pAttachments = &colorblend_attachment};
 
-  std::array dyn_states = {vk::DynamicState::eViewport,
-                           vk::DynamicState::eScissor};
-
+  std::array dynamic_states = {vk::DynamicState::eViewport,
+                               vk::DynamicState::eScissor};
   vk::PipelineDynamicStateCreateInfo dynamicState{
-      .dynamicStateCount = dyn_states.size(),
-      .pDynamicStates = dyn_states.data()};
+      .dynamicStateCount = dynamic_states.size(),
+      .pDynamicStates = dynamic_states.data()};
 
   vk::PipelineLayoutCreateInfo pipeline_layout_info{};
 
@@ -374,13 +358,13 @@ void setupShaderAndPipeline(Context &c) {
   c.pipeline = c.device.createGraphicsPipeline(nullptr, pipeline_info);
 }
 
-vk::raii::RenderPass setupRenderpass(Context &c) {
+void setupRenderpass(Context &c, vk::Format format) {
   using enum vk::SampleCountFlagBits;
   using enum vk::ImageLayout;
   using l = vk::AttachmentLoadOp;
   using s = vk::AttachmentStoreOp;
 
-  auto color = vk::AttachmentDescription{.format = c.format,
+  auto color = vk::AttachmentDescription{.format = format,
                                          .samples = e1,
                                          .loadOp = l::eClear,
                                          .storeOp = s::eStore,
@@ -389,7 +373,7 @@ vk::raii::RenderPass setupRenderpass(Context &c) {
                                          .initialLayout = eUndefined,
                                          .finalLayout = ePresentSrcKHR};
   auto colorAttachmentRef = vk::AttachmentReference{
-      .attachment = 0, .layout = vk::ImageLayout::eColorAttachmentOptimal};
+      .attachment = 0, .layout = eColorAttachmentOptimal};
   auto subpass = vk::SubpassDescription{
       .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
       .colorAttachmentCount = 1,
@@ -402,14 +386,15 @@ vk::raii::RenderPass setupRenderpass(Context &c) {
       .dstStageMask = eColorAttachmentOutput,
       .srcAccessMask = {},
       .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite};
-  return c.device.createRenderPass({.attachmentCount = 1,
-                                    .pAttachments = &color,
-                                    .subpassCount = 1,
-                                    .pSubpasses = &subpass,
-                                    .dependencyCount = 1,
-                                    .pDependencies = &dependency});
-}
 
+  auto pass_info = vk::RenderPassCreateInfo{.attachmentCount = 1,
+                                            .pAttachments = &color,
+                                            .subpassCount = 1,
+                                            .pSubpasses = &subpass,
+                                            .dependencyCount = 1,
+                                            .pDependencies = &dependency};
+  c.pass = c.device.createRenderPass(pass_info);
+}
 void setupViews(Context &c) {
   std::vector<vk::Image> images = c.swapchain.getImages();
   c.views.reserve(images.size());
@@ -424,13 +409,13 @@ void setupViews(Context &c) {
                              .levelCount = 1,
                              .baseArrayLayer = 0,
                              .layerCount = 1}}));
-    c.framebuffers.push_back(
-        c.device.createFramebuffer({.renderPass = *c.pass,
-                                    .attachmentCount = 1,
-                                    .pAttachments = &*c.views.back(),
-                                    .width = c.swapchain_extent.width,
-                                    .height = c.swapchain_extent.height,
-                                    .layers = 1}));
+    c.framebuffers.push_back(c.device.createFramebuffer(
+        vk::FramebufferCreateInfo{.renderPass = *c.pass,
+                                  .attachmentCount = 1,
+                                  .pAttachments = &*c.views.back(),
+                                  .width = c.swapchain_extent.width,
+                                  .height = c.swapchain_extent.height,
+                                  .layers = 1}));
   }
 }
 
@@ -438,10 +423,6 @@ void setupPool(Context &c) {
   c.pool = c.device.createCommandPool(
       {.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
        .queueFamilyIndex = static_cast<uint32_t>(c.indicies.graphics)});
-}
-
-vk::raii::SurfaceKHR setupSurface(Window &win, vk::raii::Instance &instance) {
-  return {instance, win.getSurface(*instance)};
 }
 } // namespace
 
@@ -454,9 +435,9 @@ Context::Context(Window &&win)
       layout(nullptr), pipeline{nullptr}, pool{nullptr},
       image_available_sem(nullptr), render_done_sem(nullptr),
       inflight_fen(nullptr) {
-  device = setupDevice(*this);
-  swapchain = setupSwapchain(*this);
-  pass = setupRenderpass(*this);
+  auto phys = setupDevice(*this);
+  auto format = setupSwapchain(*this, phys);
+  setupRenderpass(*this, format);
   setupShaderAndPipeline(*this);
   setupViews(*this);
   setupPool(*this);
@@ -472,4 +453,3 @@ Context::getCommands(uint32_t number, vk::CommandBufferLevel level) {
       .commandPool = *pool, .level = level, .commandBufferCount = number});
 }
 Context::~Context() {}
-void Context::recreateSwapchain() {}
