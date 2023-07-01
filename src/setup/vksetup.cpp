@@ -14,6 +14,7 @@
 #include "context.hpp"
 #include "queues.hpp"
 #include "validation.hpp"
+#include "vertex.hpp"
 #include "vkformat.hpp"
 #include "win_setup.hpp"
 
@@ -306,6 +307,14 @@ void setupShaderAndPipeline(Context &c) {
                                   .pName = "main"}};
 
   vk::PipelineVertexInputStateCreateInfo vert_in_info{};
+  auto bindingDescription = Vertex::getBindingDescription();
+  auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+  vert_in_info.vertexBindingDescriptionCount = 1;
+  vert_in_info.vertexAttributeDescriptionCount =
+      static_cast<uint32_t>(attributeDescriptions.size());
+  vert_in_info.pVertexBindingDescriptions = &bindingDescription;
+  vert_in_info.pVertexAttributeDescriptions = attributeDescriptions.data();
 
   vk::PipelineInputAssemblyStateCreateInfo in_assembly{
       .topology = vk::PrimitiveTopology::eTriangleList};
@@ -315,7 +324,7 @@ void setupShaderAndPipeline(Context &c) {
 
   vk::PipelineRasterizationStateCreateInfo rasterizer{
       .polygonMode = vk::PolygonMode::eFill,
-      .cullMode = vk::CullModeFlagBits::eBack,
+      .cullMode = vk::CullModeFlagBits::eNone,
       .frontFace = vk::FrontFace::eClockwise,
       .lineWidth = 1.0};
 
@@ -435,8 +444,8 @@ Context::Context(Window &&win)
       layout(nullptr), pipeline{nullptr}, pool{nullptr},
       image_available_sem(nullptr), render_done_sem(nullptr),
       inflight_fen(nullptr) {
-  auto phys = setupDevice(*this);
-  auto format = setupSwapchain(*this, phys);
+  phys = setupDevice(*this);
+  format = setupSwapchain(*this, phys);
   setupRenderpass(*this, format);
   setupShaderAndPipeline(*this);
   setupViews(*this);
