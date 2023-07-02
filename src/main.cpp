@@ -16,39 +16,6 @@
 #include "win_setup.hpp"
 
 namespace {
-const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                      {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
-struct Buffer {
-  vk::raii::Buffer buffer;
-  vk::raii::DeviceMemory mem;
-
-  void write(std::span<const uint8_t> data) {
-    auto ptr = mem.mapMemory(0, data.size());
-    std::memcpy(ptr, data.data(), data.size());
-    mem.unmapMemory();
-  }
-};
-
-template <typename T> std::span<const uint8_t> bin(T in) {
-  return {reinterpret_cast<const uint8_t *>(in.data()),
-          in.size() * sizeof(in[0])};
-}
-
-void vkassert(vk::Result r) {
-  if (r != vk::Result::eSuccess)
-    throw std::runtime_error(vk::to_string(r));
-}
-
-bool processInput() {
-  SDL_Event event;
-  SDL_PollEvent(&event);
-  return event.type == SDL_QUIT ||
-         (event.type == SDL_KEYDOWN &&
-          event.key.keysym.scancode == SDL_SCANCODE_C &&
-          event.key.keysym.mod & KMOD_CTRL);
-}
-
 uint32_t findMemoryType(Context &c, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties) {
   auto memProperties = c.phys.getMemoryProperties();
@@ -62,20 +29,68 @@ uint32_t findMemoryType(Context &c, uint32_t typeFilter,
   throw std::runtime_error("failed to find suitable memory type!");
 }
 
-Buffer createBuffer(Context &c, size_t size, vk::BufferUsageFlags usage,
-                    vk::MemoryPropertyFlags properties) {
-  auto buffer =
-      c.device.createBuffer({.size = size,
-                             .usage = usage,
-                             .sharingMode = vk::SharingMode::eExclusive});
-  auto mem_reqs = buffer.getMemoryRequirements();
+void vkassert(vk::Result r) {
+  if (r != vk::Result::eSuccess)
+    throw std::runtime_error(vk::to_string(r));
+}
 
-  auto mem =
-      c.device.allocateMemory({.allocationSize = mem_reqs.size,
-                               .memoryTypeIndex = findMemoryType(
-                                   c, mem_reqs.memoryTypeBits, properties)});
-  buffer.bindMemory(*mem, 0);
-  return {std::move(buffer), std::move(mem)};
+struct Buffer {
+  vk::raii::Buffer buffer;
+  vk::raii::DeviceMemory mem;
+  Buffer(Context &c, size_t size, vk::BufferUsageFlags usage,
+         vk::MemoryPropertyFlags properties)
+      : buffer{nullptr}, mem{nullptr} {
+    buffer = c.device.createBuffer(
+        {.size = size,
+         .usage = usage | vk::BufferUsageFlagBits::eTransferDst,
+         .sharingMode = vk::SharingMode::eExclusive});
+    auto mem_reqs = buffer.getMemoryRequirements();
+
+    mem =
+        c.device.allocateMemory({.allocationSize = mem_reqs.size,
+                                 .memoryTypeIndex = findMemoryType(
+                                     c, mem_reqs.memoryTypeBits, properties)});
+    buffer.bindMemory(*mem, 0);
+  }
+
+  void write(Context &vk, std::span<const uint8_t> data) {
+
+    using enum vk::BufferUsageFlagBits;
+    using enum vk::MemoryPropertyFlagBits;
+    auto staging =
+        Buffer(vk, data.size(), eTransferSrc, eHostVisible | eHostCoherent);
+
+    auto ptr = staging.mem.mapMemory(0, data.size());
+    std::memcpy(ptr, data.data(), data.size());
+    staging.mem.unmapMemory();
+
+    auto cmdBuffers = vk.getCommands(1);
+    vk::CommandBufferBeginInfo info{};
+    vkassert(cmdBuffers[0].begin(&info));
+    cmdBuffers[0].copyBuffer(*staging.buffer, *buffer,
+                             vk::BufferCopy{0, 0, data.size()});
+    cmdBuffers[0].end();
+    vk.queues.mem().submit(std::array{vk::SubmitInfo{
+        .commandBufferCount = 1, .pCommandBuffers = cmdBuffers.data()}});
+  }
+};
+const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                      {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                                      {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                                      {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
+template <typename T> std::span<const uint8_t> bin(T in) {
+  return {reinterpret_cast<const uint8_t *>(in.data()),
+          in.size() * sizeof(in[0])};
+}
+
+bool processInput() {
+  SDL_Event event;
+  SDL_PollEvent(&event);
+  return event.type == SDL_QUIT ||
+         (event.type == SDL_KEYDOWN &&
+          event.key.keysym.scancode == SDL_SCANCODE_C &&
+          event.key.keysym.mod & KMOD_CTRL);
 }
 
 void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
@@ -94,7 +109,7 @@ void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
 }
 
 void render(Context &c, std::span<vk::CommandBuffer> buffers, int index,
-            Buffer &vert) {
+            Buffer &vert, Buffer &ind) {
   for (auto &buffer : buffers) {
     vk::CommandBufferBeginInfo info{};
     vkassert(buffer.begin(&info));
@@ -109,14 +124,16 @@ void render(Context &c, std::span<vk::CommandBuffer> buffers, int index,
 
     buffer.bindVertexBuffers(0, std::array{*vert.buffer},
                              std::array{vk::DeviceSize(0)});
+    buffer.bindIndexBuffer(*ind.buffer, 0, vk::IndexType::eUint16);
     setScissorViewport(c, buffer);
-    buffer.draw(3, 1, 0, 0);
+    buffer.drawIndexed(indices.size(), 1, 0, 0, 0);
     buffer.endRenderPass();
     buffer.end();
   }
 }
 
-void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert) {
+void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert,
+          Buffer &ind) {
   vkassert(
       c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
   c.device.resetFences(std::array{*c.inflight_fen});
@@ -124,7 +141,7 @@ void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert) {
   auto [result, imageIndex] =
       c.swapchain.acquireNextImage(UINT64_MAX, *c.image_available_sem);
   c.pool.reset();
-  render(c, buffers, imageIndex, vert);
+  render(c, buffers, imageIndex, vert, ind);
 
   vk::Semaphore waitSemaphores[] = {*c.image_available_sem};
   vk::PipelineStageFlags waitStages[] = {
@@ -151,21 +168,18 @@ void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert) {
 Buffer createVertBuffer(Context &vk) {
   using enum vk::BufferUsageFlagBits;
   using enum vk::MemoryPropertyFlagBits;
-  auto staging = createBuffer(vk, vertices.size() * sizeof(vertices[0]),
-                              eTransferSrc, eHostVisible | eHostCoherent);
-  staging.write(bin(vertices));
-  auto vert = createBuffer(vk, vertices.size() * sizeof(vertices[0]),
-                           eTransferDst | eVertexBuffer, eDeviceLocal);
-  auto cmdBuffers = vk.getCommands(1);
-  vk::CommandBufferBeginInfo info{};
-  vkassert(cmdBuffers[0].begin(&info));
-  cmdBuffers[0].copyBuffer(
-      *staging.buffer, *vert.buffer,
-      vk::BufferCopy{0, 0, vertices.size() * sizeof(vertices[0])});
-  cmdBuffers[0].end();
-  vk.queues.mem().submit(std::array{vk::SubmitInfo{
-      .commandBufferCount = 1, .pCommandBuffers = cmdBuffers.data()}});
-  vk.queues.mem().waitIdle();
+  auto vert = Buffer(vk, vertices.size() * sizeof(vertices[0]), eVertexBuffer,
+                     eDeviceLocal);
+  vert.write(vk, bin(vertices));
+
+  return vert;
+}
+Buffer createIndBuffer(Context &vk) {
+  using enum vk::BufferUsageFlagBits;
+  using enum vk::MemoryPropertyFlagBits;
+  auto vert = Buffer(vk, indices.size() * sizeof(indices[0]), eIndexBuffer,
+                     eDeviceLocal);
+  vert.write(vk, bin(indices));
 
   return vert;
 }
@@ -175,8 +189,10 @@ int main() {
   auto vk = Context(Window("triangles!", {.width = 600, .height = 800}));
   auto cmdBuffers = vk.getCommands(1);
   auto vert = createVertBuffer(vk);
+  auto ind = createIndBuffer(vk);
+  vk.queues.mem().waitIdle();
   while (!processInput()) {
-    draw(vk, cmdBuffers, vert);
+    draw(vk, cmdBuffers, vert, ind);
   }
   vk.device.waitIdle();
   return 0;
