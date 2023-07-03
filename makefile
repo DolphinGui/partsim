@@ -1,4 +1,4 @@
-.PHONEY = all clean ec
+.PHONEY = all clean
 INCLUDE = -Iinclude -I.
 FLAGS = -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
@@ -35,23 +35,23 @@ build/src/%.o: src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 build/%.d: %.c*
-	@mkdir -p $(@D); \
-	set -e; rm -f $@; \
-	$(CC) -MM -MG $(INCLUDE) $< > $@; \
-	sed -i '1s/^/$(subst /,\/,$@) $(subst /,\/, $(@D))\//' $@
+	@mkdir -p $(@D)
+	@set -e rm -f $@
+	@$(CC) -MM -MG $(INCLUDE) $< -o $@
+	@sed -i '1s/^/$(subst /,\/,$@) $(subst /,\/, $(@D))\//' $@
 
 build/shaders/vert.spv: shaders/shader.vert
-	@mkdir -p $(@D); \
+	@mkdir -p $(@D)
 	glslc $^ -o $@
 
 build/vert.hpp: build/shaders/vert.spv
-	@xxd -i $^ $@; \
-	sed -i '1s/^/#pragma once \ninline constexpr /' $@
+	xxd -i $^ $@
+	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
 
 build/shaders/frag.spv: shaders/shader.frag
-	@mkdir -p $(@D); \
+	@mkdir -p $(@D)
 	glslc $^ -o $@
 
 build/frag.hpp: build/shaders/frag.spv
-	@xxd -i $^ $@; \
-	sed -i '1s/^/#pragma once \ninline constexpr /' $@
+	xxd -i $^ $@
+	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
