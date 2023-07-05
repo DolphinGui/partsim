@@ -21,6 +21,7 @@
 #include "win_setup.hpp"
 
 namespace {
+using FTimePeriod = std::chrono::duration<float, std::chrono::seconds::period>;
 uint32_t findMemoryType(Context &c, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties) {
   auto memProperties = c.phys.getMemoryProperties();
@@ -137,14 +138,31 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
   return {reinterpret_cast<const uint8_t *>(&in), sizeof(in)};
 }
 
-bool processInput(UniformBuffer &buffer) {
+bool processInput(UniformBuffer &ubo, FTimePeriod delta) {
   SDL_Event event;
   SDL_PollEvent(&event);
-  if (event.type == SDL_KEYDOWN)
+  bool left = false;
+  if (event.type == SDL_KEYDOWN) {
     switch (event.key.keysym.scancode) {
+    case SDL_SCANCODE_A:
+      left = true;
+      break;
     default:
       break;
     }
+  }
+  if (event.type == SDL_KEYUP) {
+    switch (event.key.keysym.scancode) {
+    case SDL_SCANCODE_A:
+      left = false;
+      break;
+    default:
+      break;
+    }
+  }
+  if (left)
+    ubo.dir.x += 1.0 * delta.count();
+
   return event.type == SDL_QUIT ||
          (event.type == SDL_KEYDOWN &&
           event.key.keysym.scancode == SDL_SCANCODE_C &&
@@ -288,29 +306,20 @@ int main() {
 
   vk.queues.mem().waitIdle();
   int curr = 0;
-  ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(90.f),
-                          glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo.view =
-      glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                  glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo.proj = glm::perspective(glm::radians(45.0f),
-                              vk.swapchain_extent.width /
-                                  (float)vk.swapchain_extent.height,
-                              0.1f, 10.0f);
-  ubo.proj[1][1] *= -1;
+  ubo.dir = {0.0, 0.0};
   ubo_bufs[curr].write(ubo);
-  auto start = std::chrono::high_resolution_clock::now();
-  while (!processInput(ubo)) {
+  auto prev = std::chrono::high_resolution_clock::now();
+  FTimePeriod delta{};
+  while (!processInput(ubo, delta)) {
     auto now = std::chrono::high_resolution_clock::now();
-    auto delta =
-        std::chrono::duration<float, std::chrono::seconds::period>(now - start);
-    ubo.model = glm::rotate(glm::mat4(1.0f), delta.count() * glm::radians(90.f),
-                            glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.dir.x += 1.0 * delta.count();
+    delta = now - prev;
     ubo_bufs[curr].write(ubo);
     draw(vk, cmdBuffers, vert, ind, descs);
     curr++;
     if (curr >= 2)
       curr = 0;
+    prev = now;
   }
   vk.device.waitIdle();
   return 0;
