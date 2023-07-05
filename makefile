@@ -5,7 +5,7 @@ FLAGS = -fPIC -fexceptions -g -O3 \
 `sdl2-config --cflags` -fno-omit-frame-pointer
 CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS)
 CFLAGS = -std=c11 $(INCLUDE) $(FLAGS)
-LDFLAGS = -lfmt -lvulkan `sdl2-config --libs` -lglfw
+LDFLAGS = -lfmt -lvulkan `sdl2-config --libs`
 CC = clang
 CXX = clang++
 C_SRCS =  $(shell find src/ -type f -name '*.c')
