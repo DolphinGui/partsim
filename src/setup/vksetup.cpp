@@ -255,9 +255,9 @@ vk::raii::SurfaceKHR setupSurface(Window &window,
   return {instance, window.getSurface(*instance)};
 }
 
-vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
+vk::Format setupSwapchain(Context &c) {
   SwapChainSupportDetails swapchain_support =
-      querySwapchainSupport(*c.surface, physicalDevice);
+      querySwapchainSupport(*c.surface, c.phys);
   vk::SurfaceFormatKHR surface_format =
       chooseSwapSurfaceFormat(swapchain_support.formats);
   c.format = surface_format.format;
@@ -451,6 +451,7 @@ void setupPool(Context &c, Renderer &r) {
       {.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
        .queueFamilyIndex = static_cast<uint32_t>(c.indicies.graphics)});
 }
+
 void setupDescPool(Context &c, Renderer &r) {
   vk::DescriptorPoolSize poolSize{.type = vk::DescriptorType::eUniformBuffer,
                                   .descriptorCount = 2};
@@ -466,12 +467,18 @@ Context::Context(Window &&win)
       surface(setupSurface(window, instance)), device(nullptr),
       swapchain(nullptr) {
   setupDevice(*this);
-  format = setupSwapchain(*this, phys);
+  format = setupSwapchain(*this);
   setupViews(*this);
 }
 Context::~Context() {}
 
-void Context::recreateSwapchain() {}
+void Context::recreateSwapchain() {
+  device.waitIdle();
+
+  views.clear();
+  setupSwapchain(*this);
+  setupViews(*this);
+}
 
 Renderer::Renderer(Context &c)
     : device(*c.device), queues(c.queues), pass(nullptr),
@@ -492,6 +499,12 @@ Renderer::Renderer(Context &c)
       device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled}));
 }
 Renderer::~Renderer() {}
+
+void Renderer::recreateFramebuffers(Context &c) {
+  framebuffers.clear();
+  setupFramebuffers(c, *this);
+  swapchain_extent = c.swapchain_extent;
+}
 
 std::vector<vk::CommandBuffer>
 Renderer::getCommands(uint32_t number, vk::CommandBufferLevel level) {

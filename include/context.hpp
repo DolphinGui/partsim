@@ -35,6 +35,7 @@ struct Context {
 
 struct Renderer {
   Renderer(Context &);
+  void recreateFramebuffers(Context &);
   ~Renderer();
 
   std::vector<vk::CommandBuffer>

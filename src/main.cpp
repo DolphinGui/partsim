@@ -19,6 +19,7 @@
 #include <vulkan/vulkan_handles.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_structs.hpp>
+#include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
 #include "ubo.hpp"
@@ -26,7 +27,7 @@
 #include "win_setup.hpp"
 
 namespace {
-using FTimePeriod = std::chrono::duration<float, std::chrono::seconds::period>;
+struct UpdateSwapchainException {};
 uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties) {
   auto memProperties = phys.getMemoryProperties();
@@ -41,7 +42,7 @@ uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
 }
 
 void vkassert(vk::Result r) {
-  if (r != vk::Result::eSuccess)
+  if (r != vk::Result::eSuccess && r != vk::Result::eSuboptimalKHR)
     throw std::runtime_error(vk::to_string(r));
 }
 
@@ -188,9 +189,6 @@ const std::vector<uint16_t> indices = {
 
 template <typename T>
 concept contiguous = std::ranges::contiguous_range<T>;
-template <typename T>
-concept not_contiguous = not
-std::ranges::contiguous_range<T>;
 
 template <contiguous T> std::span<const uint8_t> bin(T in) {
   return {reinterpret_cast<const uint8_t *>(in.data()),
@@ -200,7 +198,9 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
   return {reinterpret_cast<const uint8_t *>(&in), sizeof(in)};
 }
 
-bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta) {
+using FTimePeriod = std::chrono::duration<float, std::chrono::seconds::period>;
+bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta,
+                  bool &resized) {
   SDL_Event event;
   SDL_PollEvent(&event);
   static bool left = false;
@@ -226,8 +226,9 @@ bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta) {
     }
     break;
   }
-  case SDL_WINDOWEVENT_RESIZED: {
-
+  case SDL_WINDOWEVENT: {
+    if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+      resized = true;
     break;
   }
   }
@@ -242,7 +243,6 @@ bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta) {
 
 void setScissorViewport(vk::Extent2D swapchain_extent,
                         vk::CommandBuffer buffer) {
-
   buffer.setViewport(
       0, std::array{
              vk::Viewport{.x = 0,
@@ -281,15 +281,23 @@ void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
   }
 }
 
+vk::Result swapchain_acquire_result = vk::Result::eSuccess;
+
 void draw(Renderer &c, vk::SwapchainKHR swapchain,
           std::span<vk::CommandBuffer> buffers, Buffer &vert, Buffer &ind,
           std::span<vk::DescriptorSet> descriptors) {
   vkassert(
       c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
-  c.device.resetFences(std::array{*c.inflight_fen});
 
   auto [result, imageIndex] = c.device.acquireNextImageKHR(
       swapchain, UINT64_MAX, *c.image_available_sem);
+  if (result == vk::Result::eErrorOutOfDateKHR)
+    throw UpdateSwapchainException{};
+  else if (swapchain_acquire_result != vk::Result::eSuccess &&
+           swapchain_acquire_result != vk::Result::eSuboptimalKHR) {
+    throw std::runtime_error(vk::to_string(swapchain_acquire_result));
+  }
+  c.device.resetFences(std::array{*c.inflight_fen});
 
   c.pool.reset();
   render(c, buffers, imageIndex, vert, ind,
@@ -366,7 +374,10 @@ std::vector<vk::DescriptorSet> createDescs(Renderer &vk, unsigned count,
   }
   return descs;
 }
-
+void updateSwapchain(Context &context, Renderer &vk) {
+  context.recreateSwapchain();
+  vk.recreateFramebuffers(context);
+}
 } // namespace
 
 int main() {
@@ -386,12 +397,26 @@ int main() {
   ubo_bufs[curr].write(ubo);
   auto prev = std::chrono::high_resolution_clock::now();
   FTimePeriod delta{};
-  while (!processInput(ubo, context.window, delta)) {
+  bool resized = false;
+  while (!processInput(ubo, context.window, delta, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
-    // ubo.dir.x += 1.0 * delta.count();
     delta = now - prev;
     ubo_bufs[curr].write(ubo);
-    draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs);
+    try {
+      draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs);
+    } catch (UpdateSwapchainException e) {
+      resized = true;
+    }
+    if (resized) {
+      updateSwapchain(context, vk);
+      resized = false;
+      int width, height;
+      SDL_GetWindowSize(context.window.handle, &width, &height);
+      while (width == 0 && height == 0) {
+        processInput(ubo, context.window, delta, resized);
+      }
+    }
+
     curr++;
     if (curr >= 2)
       curr = 0;
