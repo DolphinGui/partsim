@@ -141,7 +141,7 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
 bool processInput(UniformBuffer &ubo, FTimePeriod delta) {
   SDL_Event event;
   SDL_PollEvent(&event);
-  bool left = false;
+  static bool left = false;
   if (event.type == SDL_KEYDOWN) {
     switch (event.key.keysym.scancode) {
     case SDL_SCANCODE_A:
@@ -312,7 +312,7 @@ int main() {
   FTimePeriod delta{};
   while (!processInput(ubo, delta)) {
     auto now = std::chrono::high_resolution_clock::now();
-    ubo.dir.x += 1.0 * delta.count();
+    // ubo.dir.x += 1.0 * delta.count();
     delta = now - prev;
     ubo_bufs[curr].write(ubo);
     draw(vk, cmdBuffers, vert, ind, descs);
