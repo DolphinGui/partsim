@@ -6,10 +6,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_raii.hpp>
-#include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "build/frag.hpp"
