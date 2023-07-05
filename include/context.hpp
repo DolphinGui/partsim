@@ -14,10 +14,6 @@ struct Context {
   Context(Window &&);
   ~Context();
 
-  std::vector<vk::CommandBuffer>
-  getCommands(uint32_t number,
-              vk::CommandBufferLevel level = vk::CommandBufferLevel::ePrimary);
-  std::vector<vk::DescriptorSet> getDescriptors(uint32_t number);
   void recreateSwapchain();
 
   Window window;
@@ -29,13 +25,30 @@ struct Context {
   vk::raii::Device device;
   Queues queues;
   vk::raii::SwapchainKHR swapchain;
+  std::vector<vk::raii::ImageView> views;
 
+  vk::Extent2D swapchain_extent;
+  vk::Format format;
+  Indicies indicies;
+  vk::PhysicalDevice phys;
+};
+
+struct Renderer {
+  Renderer(Context &);
+  ~Renderer();
+
+  std::vector<vk::CommandBuffer>
+  getCommands(uint32_t number,
+              vk::CommandBufferLevel level = vk::CommandBufferLevel::ePrimary);
+  std::vector<vk::DescriptorSet> getDescriptors(uint32_t number);
+
+  vk::Device device;
+  Queues queues;
   vk::raii::RenderPass pass;
+  std::vector<vk::raii::Framebuffer> framebuffers;
   vk::raii::DescriptorSetLayout descriptor_layout;
   vk::raii::PipelineLayout layout;
   vk::raii::Pipeline pipeline;
-  std::vector<vk::raii::ImageView> views;
-  std::vector<vk::raii::Framebuffer> framebuffers;
   vk::raii::CommandPool pool;
   vk::raii::DescriptorPool desc_pool;
 
@@ -43,7 +56,4 @@ struct Context {
   vk::raii::Fence inflight_fen;
 
   vk::Extent2D swapchain_extent;
-  vk::Format format;
-  Indicies indicies;
-  vk::PhysicalDevice phys;
 };

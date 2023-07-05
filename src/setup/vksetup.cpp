@@ -199,7 +199,7 @@ std::pair<bool, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
           indices};
 }
 
-vk::PhysicalDevice setupDevice(Context &c) {
+void setupDevice(Context &c) {
   auto phys_devices = vk::raii::PhysicalDevices(c.instance);
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
@@ -221,6 +221,7 @@ vk::PhysicalDevice setupDevice(Context &c) {
   if (present != graphics)
     throw std::runtime_error(
         "Seperate graphics and present queue not supported");
+  c.phys = **chosen;
 
   float queuePriority = 1.0f;
   vk::DeviceQueueCreateInfo queueCreateInfo{.queueFamilyIndex =
@@ -247,7 +248,6 @@ vk::PhysicalDevice setupDevice(Context &c) {
   c.device = vk::raii::Device(*chosen, createInfo);
   c.queues.set_graphics(c.device.getQueue(graphics, 0).release());
   c.queues.set_transfer(c.device.getQueue(transfer, 0).release());
-  return **chosen;
 }
 
 vk::raii::SurfaceKHR setupSurface(Window &window,
@@ -287,7 +287,7 @@ vk::Format setupSwapchain(Context &c, vk::PhysicalDevice physicalDevice) {
   return surface_format.format;
 }
 
-void setupShaderAndPipeline(Context &c) {
+void setupShaderAndPipeline(Context &c, Renderer &r) {
   auto frag = vk::raii::ShaderModule(
       c.device,
       vk::ShaderModuleCreateInfo{.codeSize = build_shaders_frag_spv_len,
@@ -355,13 +355,13 @@ void setupShaderAndPipeline(Context &c) {
       .descriptorCount = 1,
       .stageFlags = vk::ShaderStageFlagBits::eVertex};
 
-  c.descriptor_layout = c.device.createDescriptorSetLayout(
+  r.descriptor_layout = c.device.createDescriptorSetLayout(
       {.bindingCount = 1, .pBindings = &uboLayoutBinding});
 
   vk::PipelineLayoutCreateInfo pipeline_layout_info{
-      .setLayoutCount = 1, .pSetLayouts = &*c.descriptor_layout};
+      .setLayoutCount = 1, .pSetLayouts = &*r.descriptor_layout};
 
-  c.layout = c.device.createPipelineLayout(pipeline_layout_info);
+  r.layout = c.device.createPipelineLayout(pipeline_layout_info);
 
   vk::GraphicsPipelineCreateInfo pipeline_info{
       .stageCount = 2,
@@ -373,20 +373,20 @@ void setupShaderAndPipeline(Context &c) {
       .pMultisampleState = &multisampling,
       .pColorBlendState = &colorblending,
       .pDynamicState = &dynamicState,
-      .layout = *c.layout,
-      .renderPass = *c.pass,
+      .layout = *r.layout,
+      .renderPass = *r.pass,
       .subpass = 0};
 
-  c.pipeline = c.device.createGraphicsPipeline(nullptr, pipeline_info);
+  r.pipeline = c.device.createGraphicsPipeline(nullptr, pipeline_info);
 }
 
-void setupRenderpass(Context &c, vk::Format format) {
+void setupRenderpass(Context &c, Renderer &r) {
   using enum vk::SampleCountFlagBits;
   using enum vk::ImageLayout;
   using l = vk::AttachmentLoadOp;
   using s = vk::AttachmentStoreOp;
 
-  auto color = vk::AttachmentDescription{.format = format,
+  auto color = vk::AttachmentDescription{.format = c.format,
                                          .samples = e1,
                                          .loadOp = l::eClear,
                                          .storeOp = s::eStore,
@@ -415,12 +415,12 @@ void setupRenderpass(Context &c, vk::Format format) {
                                             .pSubpasses = &subpass,
                                             .dependencyCount = 1,
                                             .pDependencies = &dependency};
-  c.pass = c.device.createRenderPass(pass_info);
+  r.pass = c.device.createRenderPass(pass_info);
 }
+
 void setupViews(Context &c) {
   std::vector<vk::Image> images = c.swapchain.getImages();
   c.views.reserve(images.size());
-  c.framebuffers.reserve(images.size());
   for (int i = 0; i != images.size(); i++) {
     c.views.push_back(c.device.createImageView(vk::ImageViewCreateInfo{
         .image = images[i],
@@ -431,25 +431,30 @@ void setupViews(Context &c) {
                              .levelCount = 1,
                              .baseArrayLayer = 0,
                              .layerCount = 1}}));
-    c.framebuffers.push_back(c.device.createFramebuffer(
-        vk::FramebufferCreateInfo{.renderPass = *c.pass,
+  }
+}
+
+void setupFramebuffers(Context &c, Renderer &r) {
+  for (int i = 0; i != c.views.size(); i++) {
+    r.framebuffers.push_back(c.device.createFramebuffer(
+        vk::FramebufferCreateInfo{.renderPass = *r.pass,
                                   .attachmentCount = 1,
-                                  .pAttachments = &*c.views.back(),
+                                  .pAttachments = &*c.views[i],
                                   .width = c.swapchain_extent.width,
                                   .height = c.swapchain_extent.height,
                                   .layers = 1}));
   }
 }
 
-void setupPool(Context &c) {
-  c.pool = c.device.createCommandPool(
+void setupPool(Context &c, Renderer &r) {
+  r.pool = c.device.createCommandPool(
       {.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
        .queueFamilyIndex = static_cast<uint32_t>(c.indicies.graphics)});
 }
-void setupDescPool(Context &c) {
+void setupDescPool(Context &c, Renderer &r) {
   vk::DescriptorPoolSize poolSize{.type = vk::DescriptorType::eUniformBuffer,
                                   .descriptorCount = 2};
-  c.desc_pool = c.device.createDescriptorPool(
+  r.desc_pool = c.device.createDescriptorPool(
       {.maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &poolSize});
 }
 } // namespace
@@ -459,34 +464,45 @@ Context::Context(Window &&win)
       instance(setupInstance(context, window)),
       debug_messager(setupDebug(instance)),
       surface(setupSurface(window, instance)), device(nullptr),
-      swapchain(nullptr), pass(nullptr), descriptor_layout(nullptr),
-      layout(nullptr), pipeline{nullptr}, pool{nullptr}, desc_pool(nullptr),
-      image_available_sem(nullptr), render_done_sem(nullptr),
-      inflight_fen(nullptr) {
-  phys = setupDevice(*this);
+      swapchain(nullptr) {
+  setupDevice(*this);
   format = setupSwapchain(*this, phys);
-  setupRenderpass(*this, format);
-  setupShaderAndPipeline(*this);
   setupViews(*this);
-  setupPool(*this);
-  setupDescPool(*this);
-  image_available_sem = device.createSemaphore({});
-  render_done_sem = device.createSemaphore({});
-  inflight_fen =
-      device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
 }
+Context::~Context() {}
+
+void Context::recreateSwapchain() {}
+
+Renderer::Renderer(Context &c)
+    : device(*c.device), queues(c.queues), pass(nullptr),
+      descriptor_layout(nullptr), layout(nullptr), pipeline(nullptr),
+      pool(nullptr), desc_pool(nullptr), image_available_sem(nullptr),
+      render_done_sem(nullptr), inflight_fen(nullptr),
+      swapchain_extent(c.swapchain_extent) {
+  setupRenderpass(c, *this);
+  setupFramebuffers(c, *this);
+  setupShaderAndPipeline(c, *this);
+  setupPool(c, *this);
+  setupDescPool(c, *this);
+  image_available_sem =
+      vk::raii::Semaphore(c.device, device.createSemaphore({}));
+  render_done_sem = vk::raii::Semaphore(c.device, device.createSemaphore({}));
+  inflight_fen = vk::raii::Fence(
+      c.device,
+      device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled}));
+}
+Renderer::~Renderer() {}
 
 std::vector<vk::CommandBuffer>
-Context::getCommands(uint32_t number, vk::CommandBufferLevel level) {
-  return (*device).allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+Renderer::getCommands(uint32_t number, vk::CommandBufferLevel level) {
+  return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
       .commandPool = *pool, .level = level, .commandBufferCount = number});
 }
 
-std::vector<vk::DescriptorSet> Context::getDescriptors(uint32_t number) {
+std::vector<vk::DescriptorSet> Renderer::getDescriptors(uint32_t number) {
   std::vector<vk::DescriptorSetLayout> layouts(number, *descriptor_layout);
-  return (*device).allocateDescriptorSets(
+  return device.allocateDescriptorSets(
       vk::DescriptorSetAllocateInfo{.descriptorPool = *desc_pool,
                                     .descriptorSetCount = number,
                                     .pSetLayouts = layouts.data()});
 }
-Context::~Context() {}

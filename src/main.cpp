@@ -1,4 +1,5 @@
 #include <SDL2/SDL_events.h>
+#include <SDL2/SDL_video.h>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -13,7 +14,9 @@
 #include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_handles.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_structs.hpp>
 
@@ -24,9 +27,9 @@
 
 namespace {
 using FTimePeriod = std::chrono::duration<float, std::chrono::seconds::period>;
-uint32_t findMemoryType(Context &c, uint32_t typeFilter,
+uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties) {
-  auto memProperties = c.phys.getMemoryProperties();
+  auto memProperties = phys.getMemoryProperties();
   for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
     if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags &
                                     properties) == properties) {
@@ -46,9 +49,9 @@ struct Buffer {
   vk::Buffer buffer{};
   vk::DeviceMemory mem{};
   vk::Device d{};
-  Buffer(Context &c, size_t size, vk::BufferUsageFlags usage,
-         vk::MemoryPropertyFlags properties) {
-    d = *c.device;
+  Buffer(vk::Device device, vk::PhysicalDevice phys, size_t size,
+         vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) {
+    d = device;
     buffer = d.createBuffer({.size = size,
                              .usage = usage,
                              .sharingMode = vk::SharingMode::eExclusive});
@@ -56,7 +59,7 @@ struct Buffer {
 
     mem = d.allocateMemory({.allocationSize = mem_reqs.size,
                             .memoryTypeIndex = findMemoryType(
-                                c, mem_reqs.memoryTypeBits, properties)});
+                                phys, mem_reqs.memoryTypeBits, properties)});
     d.bindBufferMemory(buffer, mem, 0);
   }
 
@@ -75,12 +78,13 @@ struct Buffer {
     }
   }
 
-  void write(Context &vk, std::span<const uint8_t> data) {
+  void write(vk::Device device, vk::PhysicalDevice phys, Renderer &vk,
+             std::span<const uint8_t> data) {
 
     using enum vk::BufferUsageFlagBits;
     using enum vk::MemoryPropertyFlagBits;
-    auto staging =
-        Buffer(vk, data.size(), eTransferSrc, eHostVisible | eHostCoherent);
+    auto staging = Buffer(device, phys, data.size(), eTransferSrc,
+                          eHostVisible | eHostCoherent);
 
     auto ptr = staging.d.mapMemory(staging.mem, 0, data.size());
     std::memcpy(ptr, data.data(), data.size());
@@ -102,8 +106,8 @@ struct UBOBuffer {
   void *mapped = nullptr;
   size_t size = 0;
   UBOBuffer() = delete;
-  UBOBuffer(Context &c, size_t size)
-      : buffer(c, size, vk::BufferUsageFlagBits::eUniformBuffer,
+  UBOBuffer(vk::Device d, vk::PhysicalDevice phys, size_t size)
+      : buffer(d, phys, size, vk::BufferUsageFlagBits::eUniformBuffer,
                vk::MemoryPropertyFlagBits::eHostCoherent |
                    vk::MemoryPropertyFlagBits::eHostVisible) {
     mapped = buffer.d.mapMemory(buffer.mem, 0, size);
@@ -196,11 +200,13 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
   return {reinterpret_cast<const uint8_t *>(&in), sizeof(in)};
 }
 
-bool processInput(UniformBuffer &ubo, FTimePeriod delta) {
+bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta) {
   SDL_Event event;
   SDL_PollEvent(&event);
   static bool left = false;
-  if (event.type == SDL_KEYDOWN) {
+  switch (event.type) {
+
+  case SDL_KEYDOWN: {
     switch (event.key.keysym.scancode) {
     case SDL_SCANCODE_A:
       left = true;
@@ -208,8 +214,9 @@ bool processInput(UniformBuffer &ubo, FTimePeriod delta) {
     default:
       break;
     }
+    break;
   }
-  if (event.type == SDL_KEYUP) {
+  case SDL_KEYUP: {
     switch (event.key.keysym.scancode) {
     case SDL_SCANCODE_A:
       left = false;
@@ -217,6 +224,12 @@ bool processInput(UniformBuffer &ubo, FTimePeriod delta) {
     default:
       break;
     }
+    break;
+  }
+  case SDL_WINDOWEVENT_RESIZED: {
+
+    break;
+  }
   }
   if (left)
     ubo.dir.x += 1.0 * delta.count();
@@ -227,54 +240,57 @@ bool processInput(UniformBuffer &ubo, FTimePeriod delta) {
           event.key.keysym.mod & KMOD_CTRL);
 }
 
-void setScissorViewport(Context &c, vk::CommandBuffer buffer) {
+void setScissorViewport(vk::Extent2D swapchain_extent,
+                        vk::CommandBuffer buffer) {
 
   buffer.setViewport(
-      0, std::array{vk::Viewport{
-             .x = 0,
-             .y = 0,
-             .width = static_cast<float>(c.swapchain_extent.width),
-             .height = static_cast<float>(c.swapchain_extent.height),
-             .minDepth = 0,
-             .maxDepth = 1.0}});
+      0, std::array{
+             vk::Viewport{.x = 0,
+                          .y = 0,
+                          .width = static_cast<float>(swapchain_extent.width),
+                          .height = static_cast<float>(swapchain_extent.height),
+                          .minDepth = 0,
+                          .maxDepth = 1.0}});
 
-  buffer.setScissor(0, std::array{vk::Rect2D{.offset = {0, 0},
-                                             .extent = c.swapchain_extent}});
+  buffer.setScissor(
+      0, std::array{vk::Rect2D{.offset = {0, 0}, .extent = swapchain_extent}});
 }
 
-void render(Context &c, std::span<vk::CommandBuffer> buffers, int index,
+void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
             Buffer &vert, Buffer &ind, vk::DescriptorSet descriptor) {
   for (auto &buffer : buffers) {
     vk::CommandBufferBeginInfo info{};
     vkassert(buffer.begin(&info));
     vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
-    buffer.beginRenderPass({.renderPass = *c.pass,
-                            .framebuffer = *c.framebuffers[index],
-                            .renderArea = {{0, 0}, c.swapchain_extent},
+    buffer.beginRenderPass({.renderPass = *vk.pass,
+                            .framebuffer = *vk.framebuffers[index],
+                            .renderArea = {{0, 0}, vk.swapchain_extent},
                             .clearValueCount = 1,
                             .pClearValues = &clearColor},
                            vk::SubpassContents::eInline);
-    buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *c.pipeline);
-    buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *c.layout, 0,
+    buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vk.pipeline);
+    buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *vk.layout, 0,
                               descriptor, {});
     buffer.bindVertexBuffers(0, std::array{vert.buffer},
                              std::array{vk::DeviceSize(0)});
     buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
-    setScissorViewport(c, buffer);
+    setScissorViewport(vk.swapchain_extent, buffer);
     buffer.drawIndexed(indices.size(), 1, 0, 0, 0);
     buffer.endRenderPass();
     buffer.end();
   }
 }
 
-void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert,
-          Buffer &ind, std::span<vk::DescriptorSet> descriptors) {
+void draw(Renderer &c, vk::SwapchainKHR swapchain,
+          std::span<vk::CommandBuffer> buffers, Buffer &vert, Buffer &ind,
+          std::span<vk::DescriptorSet> descriptors) {
   vkassert(
       c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
   c.device.resetFences(std::array{*c.inflight_fen});
 
-  auto [result, imageIndex] =
-      c.swapchain.acquireNextImage(UINT64_MAX, *c.image_available_sem);
+  auto [result, imageIndex] = c.device.acquireNextImageKHR(
+      swapchain, UINT64_MAX, *c.image_available_sem);
+
   c.pool.reset();
   render(c, buffers, imageIndex, vert, ind,
          descriptors[imageIndex % descriptors.size()]);
@@ -293,7 +309,7 @@ void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert,
   c.queues.render().submit(submit, *c.inflight_fen);
 
   vk::PresentInfoKHR presentInfo{};
-  vk::SwapchainKHR swapChains[] = {*c.swapchain};
+  vk::SwapchainKHR swapChains[] = {swapchain};
   presentInfo.waitSemaphoreCount = 1;
   presentInfo.pWaitSemaphores = signalSemaphores;
   presentInfo.swapchainCount = 1;
@@ -302,22 +318,22 @@ void draw(Context &c, std::span<vk::CommandBuffer> buffers, Buffer &vert,
   vkassert(c.queues.render().presentKHR(presentInfo));
 }
 
-Buffer createVertBuffer(Context &vk) {
+Buffer createVertBuffer(Context &vk, Renderer &r) {
   using enum vk::BufferUsageFlagBits;
   using enum vk::MemoryPropertyFlagBits;
-  auto vert = Buffer(vk, vertices.size() * sizeof(vertices[0]),
+  auto vert = Buffer(*vk.device, vk.phys, vertices.size() * sizeof(vertices[0]),
                      eVertexBuffer | eTransferDst, eDeviceLocal);
-  vert.write(vk, bin(vertices));
+  vert.write(*vk.device, vk.phys, r, bin(vertices));
 
   return vert;
 }
 
-Buffer createIndBuffer(Context &vk) {
+Buffer createIndBuffer(Context &vk, Renderer &r) {
   using enum vk::BufferUsageFlagBits;
   using enum vk::MemoryPropertyFlagBits;
-  auto vert = Buffer(vk, indices.size() * sizeof(indices[0]),
+  auto vert = Buffer(*vk.device, vk.phys, indices.size() * sizeof(indices[0]),
                      eIndexBuffer | eTransferDst, eDeviceLocal);
-  vert.write(vk, bin(indices));
+  vert.write(*vk.device, vk.phys, r, bin(indices));
 
   return vert;
 }
@@ -326,12 +342,12 @@ std::vector<UBOBuffer> createUBOs(Context &vk, int count) {
   std::vector<UBOBuffer> result;
   result.reserve(count);
   for (int i = 0; i != count; i++) {
-    result.emplace_back(vk, sizeof(UniformBuffer));
+    result.emplace_back(*vk.device, vk.phys, sizeof(UniformBuffer));
   }
   return result;
 }
 
-std::vector<vk::DescriptorSet> createDescs(Context &vk, unsigned count,
+std::vector<vk::DescriptorSet> createDescs(Renderer &vk, unsigned count,
                                            std::span<UBOBuffer> ubos) {
   auto descs = vk.getDescriptors(count);
   for (size_t i = 0; i < 2; i++) {
@@ -355,16 +371,13 @@ std::vector<vk::DescriptorSet> createDescs(Context &vk, unsigned count,
 
 int main() {
 
-  for (int i = 0; i != 48; i++) {
-    fmt::print("0, {}, {},", i + 1, i + 2);
-  }
-
-  auto vk = Context(Window("triangles!", {.width = 600, .height = 600}));
+  auto context = Context(Window("triangles!", {.width = 600, .height = 600}));
+  auto vk = Renderer(context);
   auto cmdBuffers = vk.getCommands(1);
-  auto vert = createVertBuffer(vk);
-  auto ind = createIndBuffer(vk);
+  auto vert = createVertBuffer(context, vk);
+  auto ind = createIndBuffer(context, vk);
   auto ubo = UniformBuffer();
-  auto ubo_bufs = createUBOs(vk, 2);
+  auto ubo_bufs = createUBOs(context, 2);
   auto descs = createDescs(vk, 2, ubo_bufs);
 
   vk.queues.mem().waitIdle();
@@ -373,12 +386,12 @@ int main() {
   ubo_bufs[curr].write(ubo);
   auto prev = std::chrono::high_resolution_clock::now();
   FTimePeriod delta{};
-  while (!processInput(ubo, delta)) {
+  while (!processInput(ubo, context.window, delta)) {
     auto now = std::chrono::high_resolution_clock::now();
     // ubo.dir.x += 1.0 * delta.count();
     delta = now - prev;
     ubo_bufs[curr].write(ubo);
-    draw(vk, cmdBuffers, vert, ind, descs);
+    draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs);
     curr++;
     if (curr >= 2)
       curr = 0;
