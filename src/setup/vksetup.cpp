@@ -7,6 +7,9 @@
 #include <utility>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_raii.hpp>
+#include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "build/frag.hpp"
@@ -346,7 +349,17 @@ void setupShaderAndPipeline(Context &c) {
       .dynamicStateCount = dynamic_states.size(),
       .pDynamicStates = dynamic_states.data()};
 
-  vk::PipelineLayoutCreateInfo pipeline_layout_info{};
+  vk::DescriptorSetLayoutBinding uboLayoutBinding{
+      .binding = 0,
+      .descriptorType = vk::DescriptorType::eUniformBuffer,
+      .descriptorCount = 1,
+      .stageFlags = vk::ShaderStageFlagBits::eVertex};
+
+  c.descriptor_layout = c.device.createDescriptorSetLayout(
+      {.bindingCount = 1, .pBindings = &uboLayoutBinding});
+
+  vk::PipelineLayoutCreateInfo pipeline_layout_info{
+      .setLayoutCount = 1, .pSetLayouts = &*c.descriptor_layout};
 
   c.layout = c.device.createPipelineLayout(pipeline_layout_info);
 
@@ -433,6 +446,12 @@ void setupPool(Context &c) {
       {.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
        .queueFamilyIndex = static_cast<uint32_t>(c.indicies.graphics)});
 }
+void setupDescPool(Context &c) {
+  vk::DescriptorPoolSize poolSize{.type = vk::DescriptorType::eUniformBuffer,
+                                  .descriptorCount = 2};
+  c.desc_pool = c.device.createDescriptorPool(
+      {.maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &poolSize});
+}
 } // namespace
 
 Context::Context(Window &&win)
@@ -440,8 +459,8 @@ Context::Context(Window &&win)
       instance(setupInstance(context, window)),
       debug_messager(setupDebug(instance)),
       surface(setupSurface(window, instance)), device(nullptr),
-      swapchain(nullptr), pass(nullptr),
-      layout(nullptr), pipeline{nullptr}, pool{nullptr},
+      swapchain(nullptr), pass(nullptr), descriptor_layout(nullptr),
+      layout(nullptr), pipeline{nullptr}, pool{nullptr}, desc_pool(nullptr),
       image_available_sem(nullptr), render_done_sem(nullptr),
       inflight_fen(nullptr) {
   phys = setupDevice(*this);
@@ -450,6 +469,7 @@ Context::Context(Window &&win)
   setupShaderAndPipeline(*this);
   setupViews(*this);
   setupPool(*this);
+  setupDescPool(*this);
   image_available_sem = device.createSemaphore({});
   render_done_sem = device.createSemaphore({});
   inflight_fen =
@@ -460,5 +480,13 @@ std::vector<vk::CommandBuffer>
 Context::getCommands(uint32_t number, vk::CommandBufferLevel level) {
   return (*device).allocateCommandBuffers(vk::CommandBufferAllocateInfo{
       .commandPool = *pool, .level = level, .commandBufferCount = number});
+}
+
+std::vector<vk::DescriptorSet> Context::getDescriptors(uint32_t number) {
+  std::vector<vk::DescriptorSetLayout> layouts(number, *descriptor_layout);
+  return (*device).allocateDescriptorSets(
+      vk::DescriptorSetAllocateInfo{.descriptorPool = *desc_pool,
+                                    .descriptorSetCount = number,
+                                    .pSetLayouts = layouts.data()});
 }
 Context::~Context() {}

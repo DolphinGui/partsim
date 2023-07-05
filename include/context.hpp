@@ -1,7 +1,6 @@
 #pragma once
 #include "queues.hpp"
 #include "win_setup.hpp"
-#include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
 struct Indicies {
@@ -18,6 +17,7 @@ struct Context {
   std::vector<vk::CommandBuffer>
   getCommands(uint32_t number,
               vk::CommandBufferLevel level = vk::CommandBufferLevel::ePrimary);
+  std::vector<vk::DescriptorSet> getDescriptors(uint32_t number);
   void recreateSwapchain();
 
   Window window;
@@ -29,12 +29,15 @@ struct Context {
   vk::raii::Device device;
   Queues queues;
   vk::raii::SwapchainKHR swapchain;
+
   vk::raii::RenderPass pass;
+  vk::raii::DescriptorSetLayout descriptor_layout;
   vk::raii::PipelineLayout layout;
   vk::raii::Pipeline pipeline;
   std::vector<vk::raii::ImageView> views;
   std::vector<vk::raii::Framebuffer> framebuffers;
   vk::raii::CommandPool pool;
+  vk::raii::DescriptorPool desc_pool;
 
   vk::raii::Semaphore image_available_sem, render_done_sem;
   vk::raii::Fence inflight_fen;
