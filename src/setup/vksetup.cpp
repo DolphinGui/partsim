@@ -1,4 +1,5 @@
 #include <SDL2/SDL_vulkan.h>
+#include <cstddef>
 #include <cstdio>
 #include <fmt/core.h>
 #include <stdexcept>
@@ -297,10 +298,25 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
                                  .pCode = reinterpret_cast<const uint32_t *>(
                                      &build_shaders_vert_spv)});
 
+  auto scale = c.window.getScale();
+  std::array spec_map{
+      vk::SpecializationMapEntry{.constantID = 0,
+                                 .offset = offsetof(ScreenScale, width),
+                                 .size = sizeof(scale.width)},
+      vk::SpecializationMapEntry{.constantID = 1,
+                                 .offset = offsetof(ScreenScale, height),
+                                 .size = sizeof(scale.height)}};
+
+  vk::SpecializationInfo specialization_info{.mapEntryCount = spec_map.size(),
+                                             .pMapEntries = spec_map.data(),
+                                             .dataSize = sizeof(scale),
+                                             .pData = &scale};
+
   std::array shader_stages = {vk::PipelineShaderStageCreateInfo{
                                   .stage = vk::ShaderStageFlagBits::eVertex,
                                   .module = *vert,
-                                  .pName = "main"},
+                                  .pName = "main",
+                                  .pSpecializationInfo = &specialization_info},
                               vk::PipelineShaderStageCreateInfo{
                                   .stage = vk::ShaderStageFlagBits::eFragment,
                                   .module = *frag,

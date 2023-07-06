@@ -10,6 +10,10 @@ struct Extent {
   std::size_t width, height;
 };
 
+struct ScreenScale {
+  float width = 0.0, height = 0.0;
+};
+
 struct Window {
   Window(std::string_view title, Extent size);
   ~Window();
@@ -25,6 +29,7 @@ struct Window {
   }
 
   Extent getBufferSize();
+  ScreenScale getScale();
 
   vk::SurfaceKHR getSurface(vk::Instance);
   std::vector<const char *> getVkExtentions();
