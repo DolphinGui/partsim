@@ -24,12 +24,15 @@ include $(DEPS)
 build/vulkan.hpp.pch:
 	clang++ $(CPPFLAGS) -x c++-header /usr/include/vulkan/vulkan.hpp -o $@
 
+build/vulkan_raii.hpp.pch:
+	clang++ $(CPPFLAGS) -x c++-header /usr/include/vulkan/vulkan_raii.hpp -o $@
+
 build/partsim: $(OBJ)
 	$(CXX) $^ $(LDFLAGS) -o build/partsim
 
 # pch header must be included manually otherwise pch needs itself
-build/src/%.o: src/%.cpp build/vulkan.hpp.pch
-	$(CXX) -c $(CPPFLAGS) -include-pch build/vulkan.hpp.pch $< -o $@
+build/src/%.o: src/%.cpp build/vulkan.hpp.pch build/vulkan_raii.hpp.pch
+	$(CXX) -c $(CPPFLAGS) -include-pch build/vulkan.hpp.pch -include-pch build/vulkan_raii.hpp.pch $< -o $@
 
 build/src/%.o: src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
