@@ -298,7 +298,8 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
                                  .pCode = reinterpret_cast<const uint32_t *>(
                                      &build_shaders_vert_spv)});
 
-  auto scale = c.window.getScale();
+  //  for now do not do scaling. May use scaling for font or something later.
+  ScreenScale scale = {1 / 50.0, 1 / 30.0};
   std::array spec_map{
       vk::SpecializationMapEntry{.constantID = 0,
                                  .offset = offsetof(ScreenScale, width),
