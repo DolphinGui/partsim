@@ -12,6 +12,7 @@
 #include <ranges>
 #include <span>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
@@ -194,9 +195,8 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
   return {reinterpret_cast<const uint8_t *>(&in), sizeof(in)};
 }
 
-using FTimePeriod = std::chrono::duration<float, std::chrono::seconds::period>;
-bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta,
-                  bool &resized) {
+using FTime = std::chrono::duration<float, std::chrono::seconds::period>;
+bool processInput(UniformBuffer &ubo, Window &w, FTime delta, bool &resized) {
   SDL_Event event;
   SDL_PollEvent(&event);
   static bool left = false;
@@ -229,7 +229,7 @@ bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta,
   }
   }
   if (left)
-    ubo.dir[0].x += 1.0 * delta.count();
+    ubo.coord[0].x += 1.0 * delta.count();
 
   return event.type == SDL_QUIT ||
          (event.type == SDL_KEYDOWN &&
@@ -389,14 +389,22 @@ int main() {
 
   vk.queues.mem().waitIdle();
   int curr = 0;
-  ubo.dir[0] = {0.0, 0.0};
+  ubo.coord[0] = {0.0, 0.0};
   ubo_bufs[curr].write(ubo);
   auto prev = std::chrono::high_resolution_clock::now();
-  FTimePeriod delta{};
+  FTime delta{};
+  FTime total{};
+  unsigned frames{};
   bool resized = false;
   while (!processInput(ubo, context.window, delta, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
     delta = now - prev;
+    if (delta < FTime(1.0 / 60.0)) {
+      std::this_thread::sleep_for(FTime(1.0 / 60.0) - delta);
+      auto now = std::chrono::high_resolution_clock::now();
+      delta = now - prev;
+    }
+    total += delta;
     ubo_bufs[curr].write(ubo);
     try {
       draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs);
@@ -417,6 +425,12 @@ int main() {
     if (curr >= 2)
       curr = 0;
     prev = now;
+    frames++;
+    if (total > FTime(1)) {
+      total -= FTime(1);
+      fmt::print("fps: {}\n", frames);
+      frames = 0;
+    }
   }
   vk.device.waitIdle();
   return 0;
