@@ -19,6 +19,7 @@
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
+#include "sim.hpp"
 #include "ubo.hpp"
 #include "vertex.hpp"
 #include "win_setup.hpp"
@@ -196,40 +197,16 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
 }
 
 using FTime = std::chrono::duration<float, std::chrono::seconds::period>;
-bool processInput(UniformBuffer &ubo, Window &w, FTime delta, bool &resized) {
+bool processInput(Window &w, bool &resized) {
   SDL_Event event;
   SDL_PollEvent(&event);
-  static bool left = false;
   switch (event.type) {
-
-  case SDL_KEYDOWN: {
-    switch (event.key.keysym.scancode) {
-    case SDL_SCANCODE_A:
-      left = true;
-      break;
-    default:
-      break;
-    }
-    break;
-  }
-  case SDL_KEYUP: {
-    switch (event.key.keysym.scancode) {
-    case SDL_SCANCODE_A:
-      left = false;
-      break;
-    default:
-      break;
-    }
-    break;
-  }
   case SDL_WINDOWEVENT: {
     if (event.window.event == SDL_WINDOWEVENT_RESIZED)
       resized = true;
     break;
   }
   }
-  if (left)
-    ubo.coord[0].x += 1.0 * delta.count();
 
   return event.type == SDL_QUIT ||
          (event.type == SDL_KEYDOWN &&
@@ -386,25 +363,32 @@ int main() {
   auto ubo = UniformBuffer();
   auto ubo_bufs = createUBOs(context, 2);
   auto descs = createDescs(vk, 2, ubo_bufs);
+  auto world = partsim::WorldState();
 
   vk.queues.mem().waitIdle();
   int curr = 0;
   ubo.coord[0] = {0.0, 0.0};
   ubo_bufs[curr].write(ubo);
-  auto prev = std::chrono::high_resolution_clock::now();
-  FTime delta{};
-  FTime total{};
+
+  FTime total_time{};
   unsigned frames{};
   bool resized = false;
-  while (!processInput(ubo, context.window, delta, resized)) {
+  auto prev = std::chrono::high_resolution_clock::now();
+
+  while (!processInput(context.window, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
-    delta = now - prev;
+
+    FTime delta = now - prev;
     if (delta < FTime(1.0 / 60.0)) {
       std::this_thread::sleep_for(FTime(1.0 / 60.0) - delta);
       auto now = std::chrono::high_resolution_clock::now();
       delta = now - prev;
     }
-    total += delta;
+    world.process();
+    std::memcpy(&ubo.coord, world.locations.data(),
+                sizeof(*world.locations.data()) * world.locations.size());
+
+    total_time += delta;
     ubo_bufs[curr].write(ubo);
     try {
       draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs);
@@ -417,7 +401,7 @@ int main() {
       int width, height;
       SDL_GetWindowSize(context.window.handle, &width, &height);
       while (width == 0 && height == 0) {
-        processInput(ubo, context.window, delta, resized);
+        processInput(context.window, resized);
       }
     }
 
@@ -426,8 +410,8 @@ int main() {
       curr = 0;
     prev = now;
     frames++;
-    if (total > FTime(1)) {
-      total -= FTime(1);
+    if (total_time > FTime(1)) {
+      total_time -= FTime(1);
       fmt::print("fps: {}\n", frames);
       frames = 0;
     }

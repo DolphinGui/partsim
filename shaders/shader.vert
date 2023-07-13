@@ -13,6 +13,6 @@ layout (constant_id = 1) const float scale_y = 1.0;
 const vec2 scale = vec2(scale_x, scale_y);
 
 void main() {
-    gl_Position =  vec4(inPosition * scale - ubo.dir[gl_InstanceIndex], 0.0, 1.0);
+    gl_Position =  vec4(scale * (inPosition - ubo.dir[gl_InstanceIndex]), 0.0, 1.0);
     fragColor = vec3(0.2, 0.2, 0.2);
 }
