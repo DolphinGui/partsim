@@ -248,7 +248,7 @@ void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
                              std::array{vk::DeviceSize(0)});
     buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
     setScissorViewport(vk.swapchain_extent, buffer);
-    buffer.drawIndexed(indices.size(), 1, 0, 0, 0);
+    buffer.drawIndexed(indices.size(), 2, 0, 0, 0);
     buffer.endRenderPass();
     buffer.end();
   }
@@ -367,7 +367,6 @@ int main() {
 
   vk.queues.mem().waitIdle();
   int curr = 0;
-  ubo.coord[0] = {0.0, 0.0};
   ubo_bufs[curr].write(ubo);
 
   FTime total_time{};
@@ -375,6 +374,10 @@ int main() {
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
 
+  ubo.coord[0].x = 10;
+  ubo.coord[0].w = -10;
+
+  fmt::print("size: {}\n", world.locations.size());
   while (!processInput(context.window, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
 
@@ -385,8 +388,9 @@ int main() {
       delta = now - prev;
     }
     world.process();
-    std::memcpy(&ubo.coord, world.locations.data(),
-                sizeof(*world.locations.data()) * world.locations.size());
+    // auto size = std::min(sizeof(ubo.coord), sizeof(*world.locations.data()) *
+    //                                             world.locations.size());
+    // std::memcpy(&ubo.coord, world.locations.data(), size);
 
     total_time += delta;
     ubo_bufs[curr].write(ubo);

@@ -45,16 +45,16 @@ build/%.d: %.c*
 
 build/shaders/vert.spv: shaders/shader.vert
 	@mkdir -p $(@D)
-	glslc $^ -o $@
+	glslangValidator $^  -V100 -gVS -o $@
 
 build/vert.hpp: build/shaders/vert.spv
-	xxd -i $^ $@
+	@xxd -i $^ $@
 	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
 
 build/shaders/frag.spv: shaders/shader.frag
 	@mkdir -p $(@D)
-	glslc $^ -o $@
+	glslangValidator $^  -V100 -gVS -o $@
 
 build/frag.hpp: build/shaders/frag.spv
-	xxd -i $^ $@
+	@xxd -i $^ $@
 	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
