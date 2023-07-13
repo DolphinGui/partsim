@@ -1,7 +1,6 @@
 #version 450
 
 layout(location = 0) in vec2 inPosition;
-layout(location = 1) in vec3 inColor;
 
 layout(location = 0) out vec3 fragColor;
 
@@ -15,5 +14,5 @@ const vec2 scale = vec2(scale_x, scale_y);
 
 void main() {
     gl_Position =  vec4(inPosition * scale - ubo.dir, 0.0, 1.0);
-    fragColor = inColor;
+    fragColor = vec3(0.2, 0.2, 0.2);
 }

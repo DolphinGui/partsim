@@ -11,7 +11,7 @@ struct Indicies {
 };
 
 struct Context {
-  Context(Window &&);
+  explicit Context(Window &&);
   ~Context();
 
   void recreateSwapchain();

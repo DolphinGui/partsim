@@ -6,7 +6,6 @@
 
 struct Vertex {
   glm::vec2 pos;
-  glm::vec3 color;
 
   static constexpr vk::VertexInputBindingDescription
   getBindingDescription() noexcept {
@@ -16,18 +15,12 @@ struct Vertex {
                                                  vk::VertexInputRate::eVertex};
   }
 
-  static constexpr std::array<vk::VertexInputAttributeDescription, 2>
-  getAttributeDescriptions() noexcept {
-    std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions{
+  static constexpr auto getAttributeDescriptions() noexcept {
+    std::array attributeDescriptions{
         vk::VertexInputAttributeDescription{.location = 0,
                                             .binding = 0,
                                             .format = vk::Format::eR32G32Sfloat,
-                                            .offset = offsetof(Vertex, pos)},
-        vk::VertexInputAttributeDescription{.location = 1,
-                                            .binding = 0,
-                                            .format =
-                                                vk::Format::eR32G32B32Sfloat,
-                                            .offset = offsetof(Vertex, color)}};
+                                            .offset = offsetof(Vertex, pos)}};
     return attributeDescriptions;
   }
 };
