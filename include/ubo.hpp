@@ -4,5 +4,5 @@
 #include <glm/vec2.hpp>
 
 struct UniformBuffer {
-  glm::vec2 dir;
+  glm::vec2 dir[2];
 };

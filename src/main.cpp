@@ -229,7 +229,7 @@ bool processInput(UniformBuffer &ubo, Window &w, FTimePeriod delta,
   }
   }
   if (left)
-    ubo.dir.x += 1.0 * delta.count();
+    ubo.dir[0].x += 1.0 * delta.count();
 
   return event.type == SDL_QUIT ||
          (event.type == SDL_KEYDOWN &&
@@ -389,7 +389,7 @@ int main() {
 
   vk.queues.mem().waitIdle();
   int curr = 0;
-  ubo.dir = {0.0, 0.0};
+  ubo.dir[0] = {0.0, 0.0};
   ubo_bufs[curr].write(ubo);
   auto prev = std::chrono::high_resolution_clock::now();
   FTimePeriod delta{};
