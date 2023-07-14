@@ -230,7 +230,8 @@ void setScissorViewport(vk::Extent2D swapchain_extent,
 }
 
 void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
-            Buffer &vert, Buffer &ind, vk::DescriptorSet descriptor) {
+            Buffer &vert, Buffer &ind, vk::DescriptorSet descriptor,
+            int index_count) {
   for (auto &buffer : buffers) {
     vk::CommandBufferBeginInfo info{};
     vkassert(buffer.begin(&info));
@@ -248,7 +249,7 @@ void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
                              std::array{vk::DeviceSize(0)});
     buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
     setScissorViewport(vk.swapchain_extent, buffer);
-    buffer.drawIndexed(indices.size(), 2, 0, 0, 0);
+    buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
     buffer.endRenderPass();
     buffer.end();
   }
@@ -258,7 +259,7 @@ vk::Result swapchain_acquire_result = vk::Result::eSuccess;
 
 void draw(Renderer &c, vk::SwapchainKHR swapchain,
           std::span<vk::CommandBuffer> buffers, Buffer &vert, Buffer &ind,
-          std::span<vk::DescriptorSet> descriptors) {
+          std::span<vk::DescriptorSet> descriptors, int instance_count) {
   vkassert(
       c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
 
@@ -274,7 +275,7 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain,
 
   c.pool.reset();
   render(c, buffers, imageIndex, vert, ind,
-         descriptors[imageIndex % descriptors.size()]);
+         descriptors[imageIndex % descriptors.size()], instance_count);
 
   vk::Semaphore waitSemaphores[] = {*c.image_available_sem};
   vk::PipelineStageFlags waitStages[] = {
@@ -373,6 +374,7 @@ int main() {
   unsigned frames{};
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
+  int instances = world.locations.size();
 
   while (!processInput(context.window, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
@@ -391,7 +393,7 @@ int main() {
     total_time += delta;
     ubo_bufs[curr].write(ubo);
     try {
-      draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs);
+      draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs, instances);
     } catch (UpdateSwapchainException e) {
       resized = true;
     }

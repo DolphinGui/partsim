@@ -9,8 +9,16 @@ namespace partsim {
 WorldState::WorldState() {
   locations.push_back({10, 0});
   locations.push_back({-10, 10});
-  velocities.push_back({-5, 5});
+  locations.push_back({-2, 10});
+  locations.push_back({-6, 10});
+  locations.push_back({-2, 15});
+  locations.push_back({-2, 12});
+  velocities.push_back({-5, 1});
   velocities.push_back({5, 0});
+  velocities.push_back({3, 12});
+  velocities.push_back({15, 12});
+  velocities.push_back({-8, 12});
+  velocities.push_back({-12, 12});
   max_x = 50;
   min_x = -50;
   max_y = 30;
@@ -59,14 +67,11 @@ void WorldState::process() {
     bounds_check(l, v, radius, max_x, min_x, max_y, min_y);
   }
 
-  auto i_v = velocities.begin();
-  for (auto i_s = locations.begin(); i_s != locations.end() - 1; ++i_s) {
-    auto j_v = i_v;
-    for (auto j_s = 1 + i_s; j_s != locations.end(); ++j_s) {
-      collision_check(*i_s, *i_v, *j_s, *j_v, radius);
-      ++j_v;
+  for (int i = 0; i < locations.size() - 1; ++i) {
+    for (int j = 1 + i; j < locations.size(); ++j) {
+      collision_check(locations.at(i), velocities.at(i), locations.at(j),
+                      velocities.at(j), radius);
     }
-    ++i_v;
   }
 }
 } // namespace partsim
