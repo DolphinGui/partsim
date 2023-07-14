@@ -7,7 +7,7 @@
 namespace partsim {
 WorldState::WorldState() {
   locations.push_back(Vertex{{10, 0}});
-  locations.push_back(Vertex{{10, 0}});
+  locations.push_back(Vertex{{-10, 0}});
   velocities.push_back({-5, 5});
   velocities.push_back({5, 5});
   max_x = 50;

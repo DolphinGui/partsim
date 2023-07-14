@@ -374,10 +374,6 @@ int main() {
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
 
-  ubo.coord[0].x = 10;
-  ubo.coord[0].w = -10;
-
-  fmt::print("size: {}\n", world.locations.size());
   while (!processInput(context.window, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
 
@@ -388,9 +384,9 @@ int main() {
       delta = now - prev;
     }
     world.process();
-    // auto size = std::min(sizeof(ubo.coord), sizeof(*world.locations.data()) *
-    //                                             world.locations.size());
-    // std::memcpy(&ubo.coord, world.locations.data(), size);
+    auto size = std::min(sizeof(ubo.coord), sizeof(*world.locations.data()) *
+                                                world.locations.size());
+    std::memcpy(&ubo.coord, world.locations.data(), size);
 
     total_time += delta;
     ubo_bufs[curr].write(ubo);

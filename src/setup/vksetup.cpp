@@ -28,7 +28,9 @@ struct SwapChainSupportDetails {
   bool ok() const noexcept { return !formats.empty() || !presentModes.empty(); }
 };
 
-constexpr std::array deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+constexpr std::array deviceExtensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME};
 
 inline VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
