@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 #include <fmt/core.h>
 #include <ranges>
 
@@ -6,19 +7,24 @@
 #include "ubo.hpp"
 
 namespace partsim {
+namespace {
+glm::vec2 gen_s() {
+  return {20.0 * std::rand() / float(RAND_MAX),
+          20.0 * std::rand() / float(RAND_MAX)};
+}
+glm::vec2 gen_v() {
+  return {10.0 * std::rand() / float(RAND_MAX),
+          10.0 * std::rand() / float(RAND_MAX)};
+}
+} // namespace
 WorldState::WorldState() {
-  locations.push_back({10, 0});
-  locations.push_back({-10, 10});
-  locations.push_back({-2, 10});
-  locations.push_back({-6, 10});
-  locations.push_back({-2, 15});
-  locations.push_back({-2, 12});
-  velocities.push_back({-5, 1});
-  velocities.push_back({5, 0});
-  velocities.push_back({3, 12});
-  velocities.push_back({15, 12});
-  velocities.push_back({-8, 12});
-  velocities.push_back({-12, 12});
+  std::srand(std::time(nullptr));
+  locations.reserve(30);
+  velocities.reserve(30);
+  for (int i = 0; i != 30; i++) {
+    locations.push_back(gen_s());
+    velocities.push_back(gen_v());
+  }
   max_x = 50;
   min_x = -50;
   max_y = 30;

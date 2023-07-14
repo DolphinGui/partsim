@@ -5,7 +5,7 @@ layout(location = 0) in vec2 inPosition;
 layout(location = 0) out vec3 fragColor;
 
 layout(binding = 0) uniform UniformBufferObject {
-    vec4[20] dir;
+    vec4[500] dir;
 } ubo;
 
 layout (constant_id = 0) const float scale_x = 1.0;
