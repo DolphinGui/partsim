@@ -9,8 +9,8 @@
 namespace partsim {
 namespace {
 glm::vec2 gen_s() {
-  return {20.0 * std::rand() / float(RAND_MAX),
-          20.0 * std::rand() / float(RAND_MAX)};
+  return {200.0 * std::rand() / float(RAND_MAX) - 100.0,
+          200.0 * std::rand() / float(RAND_MAX) - 100.0};
 }
 glm::vec2 gen_v() {
   return {10.0 * std::rand() / float(RAND_MAX),
@@ -19,16 +19,16 @@ glm::vec2 gen_v() {
 } // namespace
 WorldState::WorldState() {
   std::srand(std::time(nullptr));
-  locations.reserve(30);
-  velocities.reserve(30);
-  for (int i = 0; i != 30; i++) {
+  locations.reserve(1000);
+  velocities.reserve(1000);
+  for (int i = 0; i != 4000; i++) {
     locations.push_back(gen_s());
     velocities.push_back(gen_v());
   }
-  max_x = 50;
-  min_x = -50;
-  max_y = 30;
-  min_y = -30;
+  max_x = 100;
+  min_x = -100;
+  max_y = 100;
+  min_y = -100;
 }
 
 namespace {

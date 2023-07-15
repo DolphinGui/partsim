@@ -4,5 +4,5 @@
 #include <glm/vec2.hpp>
 
 struct UniformBuffer {
-  glm::vec2 coord[500];
+  glm::vec2 coord[10000];
 };
