@@ -374,7 +374,7 @@ int main() {
   unsigned frames{};
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
-  int instances = world.locations.size();
+  int instances = world.objects;
 
   while (!processInput(context.window, resized)) {
     auto now = std::chrono::high_resolution_clock::now();
