@@ -361,14 +361,14 @@ int main() {
   auto cmdBuffers = vk.getCommands(1);
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
-  auto ubo = UniformBuffer();
   auto ubo_bufs = createUBOs(context, 2);
   auto descs = createDescs(vk, 2, ubo_bufs);
   auto world = partsim::WorldState();
 
   vk.queues.mem().waitIdle();
   int curr = 0;
-  ubo_bufs[curr].write(ubo);
+  world.process();
+  world.write(ubo_bufs[curr].mapped);
 
   FTime total_time{};
   unsigned frames{};
@@ -386,12 +386,9 @@ int main() {
       delta = now - prev;
     }
     world.process();
-    auto size = std::min(sizeof(ubo.coord), sizeof(*world.locations.data()) *
-                                                world.locations.size());
-    std::memcpy(&ubo.coord, world.locations.data(), size);
+    world.write(ubo_bufs[curr].mapped);
 
     total_time += delta;
-    ubo_bufs[curr].write(ubo);
     try {
       draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs, instances);
     } catch (UpdateSwapchainException e) {

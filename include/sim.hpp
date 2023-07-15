@@ -23,6 +23,7 @@ struct WorldState {
 
   explicit WorldState();
   void process();
+  void write(void *dst) const;
 };
 
 } // namespace partsim

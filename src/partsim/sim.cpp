@@ -80,4 +80,9 @@ void WorldState::process() {
     }
   }
 }
+
+void WorldState::write(void *dst) const {
+  std::memcpy(dst, locations.data(),
+              sizeof(*locations.data()) * locations.size());
+}
 } // namespace partsim
