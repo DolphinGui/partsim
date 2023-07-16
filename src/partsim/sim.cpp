@@ -20,16 +20,20 @@ glm::vec2 gen_v() {
   return {6.0 * signrand() / float(RAND_MAX),
           6.0 * signrand() / float(RAND_MAX)};
 }
+int indexVec(glm::vec2 s) {
+  return int(s.x / (WorldState::max_x / WorldState::sector_count_x)) +
+         int(s.y / (WorldState::max_y / WorldState::sector_count_y)) *
+             WorldState::sector_count_x;
+}
 } // namespace
 WorldState::WorldState() {
   std::srand(std::time(nullptr));
-  locations.resize(sector_count);
-  velocities.resize(sector_count);
-  counts.resize(sector_count, 0);
+  locations.resize(sector_count * 2);
+  velocities.resize(sector_count * 2);
+  counts.resize(sector_count * 2, 0);
   for (int i = 0; i != objects; i++) {
     auto s = gen_s(max_x, max_y);
-    int index = int(s.x / (max_x / sector_count_x)) +
-                int(s.y / (max_y / sector_count_y)) * sector_count_x;
+    int index = indexVec(s);
     getS(index) = s;
     getV(index) = gen_v();
     counts.at(index)++;
@@ -37,20 +41,19 @@ WorldState::WorldState() {
 }
 
 namespace {
-inline void bounds_check(glm::vec2 &s, glm::vec2 &v, float radius, float max_x,
-                         float min_x, float max_y, float min_y) {
-  if (s.x + radius > max_x) {
-    s.x -= s.x - max_x + radius;
+inline void bounds_check(glm::vec2 &s, glm::vec2 &v) {
+  if (s.x + WorldState::radius > WorldState::max_x) {
+    s.x -= s.x - WorldState::max_x + WorldState::radius;
     v.x *= -1;
-  } else if (s.x < min_x + radius) {
-    s.x -= s.x - min_x - radius;
+  } else if (s.x < WorldState::radius) {
+    s.x -= s.x - WorldState::radius;
     v.x *= -1;
   }
-  if (s.y + radius > max_y) {
-    s.y -= s.y - max_y + radius;
+  if (s.y + WorldState::radius > WorldState::max_y) {
+    s.y -= s.y - WorldState::max_y + WorldState::radius;
     v.y *= -1;
-  } else if (s.y < min_y + radius) {
-    s.y -= s.y - min_y - radius;
+  } else if (s.y < WorldState::radius) {
+    s.y -= s.y - WorldState::radius;
     v.y *= -1;
   }
 }
@@ -58,9 +61,9 @@ inline void bounds_check(glm::vec2 &s, glm::vec2 &v, float radius, float max_x,
 inline auto sqr(auto a) { return a * a; }
 
 inline void collision_check(glm::vec2 &a_s, glm::vec2 &a_v, glm::vec2 &b_s,
-                            glm::vec2 &b_v, float radius) {
+                            glm::vec2 &b_v) {
   auto distance = sqr(a_s.x - b_s.x) + sqr(a_s.y - b_s.y);
-  if (distance < sqr(2 * radius)) {
+  if (distance < sqr(2 * WorldState::radius)) {
     auto d_s = a_s - b_s;
     auto diff_a = glm::dot(a_v - b_v, d_s) * (d_s) / glm::dot(d_s, d_s);
     auto diff_b = glm::dot(b_v - a_v, -d_s) * (-d_s) / glm::dot(d_s, d_s);
@@ -68,27 +71,45 @@ inline void collision_check(glm::vec2 &a_s, glm::vec2 &a_v, glm::vec2 &b_s,
     b_v -= diff_b;
   }
 }
+
+inline void sortSector(glm::vec2 s, glm::vec2 v,
+                       std::span<WorldState::Sector> other_s,
+                       std::span<WorldState::Sector> other_v, size_t &count) {
+  int index = indexVec(s);
+  other_s[index][count] = s;
+  other_v[index][count] = v;
+  count++;
+}
+
 } // namespace
 
 void WorldState::process() {
-  for (int sector = 0; sector != sector_count; sector++) {
+  for (int sector = base; sector != sector_count + base; sector++) {
     for (int i = 0; i != counts[sector]; i++) {
       locations[sector][i] += velocities[sector][i];
     }
   }
-  for (int sector = 0; sector != sector_count; sector++) {
+
+  for (int sector = base; sector != sector_count + base; sector++) {
     for (int i = 0; i != counts[sector]; i++) {
-      bounds_check(locations[sector][i], velocities[sector][i], radius, max_x,
-                   0, max_y, 0);
+      bounds_check(locations[sector][i], velocities[sector][i]);
     }
   }
 
-  // for (int i = 0; i < locations.size() - 1; ++i) {
-  //   for (int j = 1 + i; j < locations.size(); ++j) {
-  //     collision_check(locations.at(i), velocities.at(i), locations.at(j),
-  //                     velocities.at(j), radius);
-  //   }
-  // }
+  int other = base == 0 ? sector_count : 0;
+  for (int sector = base; sector != sector_count + base; sector++) {
+    for (int i = 0; i != counts[sector]; i++) {
+      sortSector(locations[sector][i], velocities[sector][i],
+                 std::span(locations).subspan(other),
+                 std::span(velocities).subspan(other), counts[sector + other]);
+    }
+  }
+
+  if (base == 0) {
+    base = sector_count;
+  } else {
+    base = 0;
+  }
 }
 
 void WorldState::write(void *dst) const {

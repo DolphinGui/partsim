@@ -35,6 +35,7 @@ struct WorldState {
   std::vector<size_t> counts;
   std::vector<glm::vec2> extra_locations;
   std::vector<glm::vec2> extra_velocities;
+  int base = 0;
 
   explicit WorldState();
   void process();
