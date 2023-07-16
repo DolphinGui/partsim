@@ -17,15 +17,15 @@ glm::vec2 gen_s(float x, float y) {
 int signrand() { return std::rand() - RAND_MAX / 2; }
 
 glm::vec2 gen_v() {
-  return {3.0 * signrand() / float(RAND_MAX),
-          3.0 * signrand() / float(RAND_MAX)};
+  return {6.0 * signrand() / float(RAND_MAX),
+          6.0 * signrand() / float(RAND_MAX)};
 }
 } // namespace
 WorldState::WorldState() {
   std::srand(std::time(nullptr));
-  locations.resize(4);
-  velocities.resize(4);
-  counts.resize(4, 0);
+  locations.resize(sector_count);
+  velocities.resize(sector_count);
+  counts.resize(sector_count, 0);
   for (int i = 0; i != objects; i++) {
     auto s = gen_s(max_x, max_y);
     int index = int(s.x / (max_x / sector_count_x)) +
@@ -34,7 +34,6 @@ WorldState::WorldState() {
     getV(index) = gen_v();
     counts.at(index)++;
   }
-  fmt::print("[{}]\n", fmt::join(counts, ", "));
 }
 
 namespace {

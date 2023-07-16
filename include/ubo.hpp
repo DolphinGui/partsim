@@ -6,3 +6,8 @@
 struct UniformBuffer {
   glm::vec2 coord[10000];
 };
+
+// this should be a combination of model view projection
+struct PushConstants {
+	glm::mat4 transform;
+};

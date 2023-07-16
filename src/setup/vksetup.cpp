@@ -14,6 +14,7 @@
 #include "build/vert.hpp"
 #include "context.hpp"
 #include "queues.hpp"
+#include "ubo.hpp"
 #include "validation.hpp"
 #include "vertex.hpp"
 #include "vkformat.hpp"
@@ -374,8 +375,16 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
   r.descriptor_layout = c.device.createDescriptorSetLayout(
       {.bindingCount = 1, .pBindings = &uboLayoutBinding});
 
+  vk::PushConstantRange push_constant;
+  push_constant.offset = 0;
+  push_constant.size = sizeof(PushConstants);
+  push_constant.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
   vk::PipelineLayoutCreateInfo pipeline_layout_info{
-      .setLayoutCount = 1, .pSetLayouts = &*r.descriptor_layout};
+      .setLayoutCount = 1,
+      .pSetLayouts = &*r.descriptor_layout,
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &push_constant};
 
   r.layout = c.device.createPipelineLayout(pipeline_layout_info);
 

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <numeric>
@@ -231,7 +232,7 @@ void setScissorViewport(vk::Extent2D swapchain_extent,
 
 void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
             Buffer &vert, Buffer &ind, vk::DescriptorSet descriptor,
-            int index_count) {
+            int index_count, PushConstants &constants) {
   for (auto &buffer : buffers) {
     vk::CommandBufferBeginInfo info{};
     vkassert(buffer.begin(&info));
@@ -249,6 +250,8 @@ void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
                              std::array{vk::DeviceSize(0)});
     buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
     setScissorViewport(vk.swapchain_extent, buffer);
+    buffer.pushConstants(*vk.layout, vk::ShaderStageFlagBits::eVertex, 0,
+                         vk::ArrayProxy<const PushConstants>(1, &constants));
     buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
     buffer.endRenderPass();
     buffer.end();
@@ -259,7 +262,8 @@ vk::Result swapchain_acquire_result = vk::Result::eSuccess;
 
 void draw(Renderer &c, vk::SwapchainKHR swapchain,
           std::span<vk::CommandBuffer> buffers, Buffer &vert, Buffer &ind,
-          std::span<vk::DescriptorSet> descriptors, int instance_count) {
+          std::span<vk::DescriptorSet> descriptors, int instance_count,
+          PushConstants &constants) {
   vkassert(
       c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
 
@@ -275,7 +279,8 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain,
 
   c.pool.reset();
   render(c, buffers, imageIndex, vert, ind,
-         descriptors[imageIndex % descriptors.size()], instance_count);
+         descriptors[imageIndex % descriptors.size()], instance_count,
+         constants);
 
   vk::Semaphore waitSemaphores[] = {*c.image_available_sem};
   vk::PipelineStageFlags waitStages[] = {
@@ -364,6 +369,7 @@ int main() {
   auto ubo_bufs = createUBOs(context, 2);
   auto descs = createDescs(vk, 2, ubo_bufs);
   auto world = partsim::WorldState();
+  auto transform = PushConstants{glm::translate(glm::mat4(1.0), {1., 1., 0})};
 
   vk.queues.mem().waitIdle();
   int curr = 0;
@@ -390,7 +396,8 @@ int main() {
 
     total_time += delta;
     try {
-      draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs, instances);
+      draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs, instances,
+           transform);
     } catch (UpdateSwapchainException e) {
       resized = true;
     }
