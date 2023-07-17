@@ -4,16 +4,17 @@
 #include <cmath>
 #include <glm/vec2.hpp>
 #include <ratio>
+#include <span>
 #include <vector>
 
-#include "constmath.hpp"
+#include "util/constmath.hpp"
 #include "vertex.hpp"
 
 namespace partsim {
 namespace chron = std::chrono;
 using ftime = chron::duration<float>;
 
-constexpr float tick_rate = 30.0;
+constexpr float tick_rate = 60.0;
 constexpr auto world_delta = ftime(chron::seconds(1)) / tick_rate;
 
 constexpr inline int calcSectorSize(int objects, int sectors) {
@@ -23,30 +24,48 @@ constexpr inline int calcSectorSize(int objects, int sectors) {
 }
 
 struct WorldState {
-  constexpr static int objects = 30;
+  constexpr static int objects = 10;
   constexpr static int sector_count_x = 2, sector_count_y = 2,
                        sector_count = sector_count_x * sector_count_y;
   using Sector = std::array<glm::vec2, calcSectorSize(objects, sector_count)>;
 
   constexpr static float max_x = 100, max_y = 60;
   constexpr static float radius = 1.0;
-  std::vector<Sector> locations;
-  std::vector<Sector> velocities;
-  std::vector<size_t> counts;
+  std::vector<Sector> locations_vec;
+  std::vector<Sector> velocities_vec;
+  std::vector<size_t> counts_vec;
   std::vector<glm::vec2> extra_locations;
   std::vector<glm::vec2> extra_velocities;
-  int base = 0;
+
+  bool is_swap = false;
 
   explicit WorldState();
   void process();
-  void write(void *dst) const;
+  void write(void *dst);
 
-  inline glm::vec2 &getS(int index) {
-    return locations.at(index)[counts[index]];
+  inline std::span<Sector> locations(bool swap = false) {
+    if (is_swap != swap)
+      return std::span<Sector>(locations_vec.data() + sector_count,
+                               sector_count);
+    else
+      return std::span<Sector>(locations_vec.data(), sector_count);
   }
-  inline glm::vec2 &getV(int index) {
-    return velocities.at(index)[counts[index]];
+
+  inline std::span<Sector> velocities(bool swap = false) {
+    if (is_swap != swap)
+      return std::span<Sector>(velocities_vec.data() + sector_count,
+                               sector_count);
+    else
+      return std::span<Sector>(velocities_vec.data(), sector_count);
   }
+
+  inline std::span<size_t> counts(bool swap = false) {
+    if (is_swap != swap)
+      return std::span<size_t>(counts_vec.data() + sector_count, sector_count);
+    else
+      return std::span<size_t>(counts_vec.data(), sector_count);
+  }
+  void print();
 };
 
 } // namespace partsim
