@@ -1,0 +1,3 @@
+[submodule "external/tuplet"]
+	path = external/tuplet
+	url = https://github.com/codeinred/tuplet.git
