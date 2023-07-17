@@ -4,7 +4,7 @@
 #include <glm/vec2.hpp>
 
 struct UniformBuffer {
-  glm::vec2 coord[10000];
+  glm::vec2 coord[1024];
 };
 
 // this should be a combination of model view projection

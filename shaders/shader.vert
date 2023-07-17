@@ -5,7 +5,7 @@ layout(location = 0) in vec2 inPosition;
 layout(location = 0) out vec3 fragColor;
 
 layout(binding = 0) uniform UniformBufferObject {
-    vec4[10000] dir;
+    vec4[1024] dir;
 } ubo;
 
 layout( push_constant ) uniform constants
