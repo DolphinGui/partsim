@@ -10,6 +10,8 @@ struct Indicies {
   }
 };
 
+constexpr size_t frames_in_flight = 2;
+
 struct Context {
   explicit Context(Window &&);
   ~Context();
@@ -53,8 +55,9 @@ struct Renderer {
   vk::raii::CommandPool pool;
   vk::raii::DescriptorPool desc_pool;
 
-  vk::raii::Semaphore image_available_sem, render_done_sem;
-  vk::raii::Fence inflight_fen;
+  std::array<vk::Semaphore, frames_in_flight> image_available_sem,
+      render_done_sem;
+  std::array<vk::Fence, frames_in_flight> inflight_fen;
 
   vk::Extent2D swapchain_extent;
 };

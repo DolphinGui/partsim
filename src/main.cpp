@@ -98,6 +98,7 @@ struct Buffer {
     cmdBuffers[0].end();
     vk.queues.mem().submit(std::array{vk::SubmitInfo{
         .commandBufferCount = 1, .pCommandBuffers = cmdBuffers.data()}});
+    vk.queues.mem().waitIdle();
   }
 };
 
@@ -205,6 +206,8 @@ bool processInput(Window &w, bool &resized) {
   case SDL_WINDOWEVENT: {
     if (event.window.event == SDL_WINDOWEVENT_RESIZED)
       resized = true;
+    else if (event.window.event == SDL_WINDOWEVENT_CLOSE)
+      return true;
     break;
   }
   }
@@ -230,70 +233,67 @@ void setScissorViewport(vk::Extent2D swapchain_extent,
       0, std::array{vk::Rect2D{.offset = {0, 0}, .extent = swapchain_extent}});
 }
 
-void render(Renderer &vk, std::span<vk::CommandBuffer> buffers, int index,
-            Buffer &vert, Buffer &ind, vk::DescriptorSet descriptor,
-            int index_count, PushConstants &constants) {
-  for (auto &buffer : buffers) {
-    vk::CommandBufferBeginInfo info{};
-    vkassert(buffer.begin(&info));
-    vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
-    buffer.beginRenderPass({.renderPass = *vk.pass,
-                            .framebuffer = *vk.framebuffers[index],
-                            .renderArea = {{0, 0}, vk.swapchain_extent},
-                            .clearValueCount = 1,
-                            .pClearValues = &clearColor},
-                           vk::SubpassContents::eInline);
-    buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vk.pipeline);
-    buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *vk.layout, 0,
-                              descriptor, {});
-    buffer.bindVertexBuffers(0, std::array{vert.buffer},
-                             std::array{vk::DeviceSize(0)});
-    buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
-    setScissorViewport(vk.swapchain_extent, buffer);
-    buffer.pushConstants(*vk.layout, vk::ShaderStageFlagBits::eVertex, 0,
-                         vk::ArrayProxy<const PushConstants>(1, &constants));
-    buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
-    buffer.endRenderPass();
-    buffer.end();
-  }
+void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
+            Buffer &ind, vk::DescriptorSet descriptor, int index_count,
+            PushConstants &constants) {
+  vk::CommandBufferBeginInfo info{};
+  vkassert(buffer.begin(&info));
+  vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
+  buffer.beginRenderPass({.renderPass = *vk.pass,
+                          .framebuffer = *vk.framebuffers[index],
+                          .renderArea = {{0, 0}, vk.swapchain_extent},
+                          .clearValueCount = 1,
+                          .pClearValues = &clearColor},
+                         vk::SubpassContents::eInline);
+  buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vk.pipeline);
+  buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *vk.layout, 0,
+                            descriptor, {});
+  buffer.bindVertexBuffers(0, std::array{vert.buffer},
+                           std::array{vk::DeviceSize(0)});
+  buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
+  setScissorViewport(vk.swapchain_extent, buffer);
+  buffer.pushConstants(*vk.layout, vk::ShaderStageFlagBits::eVertex, 0,
+                       vk::ArrayProxy<const PushConstants>(1, &constants));
+  buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
+  buffer.endRenderPass();
+  buffer.end();
 }
 
 vk::Result swapchain_acquire_result = vk::Result::eSuccess;
 
-void draw(Renderer &c, vk::SwapchainKHR swapchain,
-          std::span<vk::CommandBuffer> buffers, Buffer &vert, Buffer &ind,
-          std::span<vk::DescriptorSet> descriptors, int instance_count,
-          PushConstants &constants) {
-  vkassert(
-      c.device.waitForFences(std::array{*c.inflight_fen}, true, UINT64_MAX));
+void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
+          Buffer &vert, Buffer &ind, std::span<vk::DescriptorSet> descriptors,
+          int instance_count, PushConstants &constants, int index) {
+  vkassert(c.device.waitForFences(c.inflight_fen[index], true, UINT64_MAX));
 
   auto [result, imageIndex] = c.device.acquireNextImageKHR(
-      swapchain, UINT64_MAX, *c.image_available_sem);
+      swapchain, UINT64_MAX, c.image_available_sem[index]);
   if (result == vk::Result::eErrorOutOfDateKHR)
     throw UpdateSwapchainException{};
   else if (swapchain_acquire_result != vk::Result::eSuccess &&
            swapchain_acquire_result != vk::Result::eSuboptimalKHR) {
     throw std::runtime_error(vk::to_string(swapchain_acquire_result));
   }
-  c.device.resetFences(std::array{*c.inflight_fen});
+  c.device.resetFences(c.inflight_fen[index]);
 
-  c.pool.reset();
-  render(c, buffers, imageIndex, vert, ind,
+  buffer.reset();
+  // c.pool.reset();
+  render(c, buffer, imageIndex, vert, ind,
          descriptors[imageIndex % descriptors.size()], instance_count,
          constants);
 
-  vk::Semaphore waitSemaphores[] = {*c.image_available_sem};
+  vk::Semaphore waitSemaphores[] = {c.image_available_sem[index]};
   vk::PipelineStageFlags waitStages[] = {
       vk::PipelineStageFlagBits::eColorAttachmentOutput};
-  vk::Semaphore signalSemaphores[] = {*c.render_done_sem};
+  vk::Semaphore signalSemaphores[] = {c.render_done_sem[index]};
   std::array submit = {vk::SubmitInfo{.waitSemaphoreCount = 1,
                                       .pWaitSemaphores = waitSemaphores,
                                       .pWaitDstStageMask = waitStages,
                                       .commandBufferCount = 1,
-                                      .pCommandBuffers = buffers.data(),
+                                      .pCommandBuffers = &buffer,
                                       .signalSemaphoreCount = 1,
                                       .pSignalSemaphores = signalSemaphores}};
-  c.queues.render().submit(submit, *c.inflight_fen);
+  c.queues.render().submit(submit, c.inflight_fen[index]);
 
   vk::PresentInfoKHR presentInfo{};
   vk::SwapchainKHR swapChains[] = {swapchain};
@@ -363,11 +363,11 @@ int main() {
 
   auto context = Context(Window("triangles!", {.width = 1000, .height = 600}));
   auto vk = Renderer(context);
-  auto cmdBuffers = vk.getCommands(1);
+  auto cmdBuffers = vk.getCommands(frames_in_flight);
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
-  auto ubo_bufs = createUBOs(context, 2);
-  auto descs = createDescs(vk, 2, ubo_bufs);
+  auto ubo_bufs = createUBOs(context, frames_in_flight);
+  auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
   auto world = partsim::WorldState();
   auto transform = PushConstants{glm::translate(glm::mat4(1.0), {1., 1., 0})};
 
@@ -396,8 +396,8 @@ int main() {
 
     total_time += delta;
     try {
-      draw(vk, *context.swapchain, cmdBuffers, vert, ind, descs, instances,
-           transform);
+      draw(vk, *context.swapchain, cmdBuffers[curr], vert, ind, descs,
+           instances, transform, curr);
     } catch (UpdateSwapchainException e) {
       resized = true;
     }
@@ -412,7 +412,7 @@ int main() {
     }
 
     curr++;
-    if (curr >= 2)
+    if (curr >= frames_in_flight)
       curr = 0;
     prev = now;
     frames++;

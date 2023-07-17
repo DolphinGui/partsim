@@ -40,7 +40,7 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
 
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
   auto severity = vk::DebugUtilsMessageSeverityFlagBitsEXT(sev);
-  if (severity & (eError | eWarning))
+  if (severity & (eError | eWarning | eInfo))
     fmt::print(stderr, "[{}][{}] {}\n", severity,
                vk::DebugUtilsMessageTypeFlagBitsEXT(type), data->pMessage);
 
@@ -80,7 +80,7 @@ setupDebug(const vk::raii::Instance &instance) {
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
   using enum vk::DebugUtilsMessageTypeFlagBitsEXT;
   vk::DebugUtilsMessengerCreateInfoEXT createInfo{
-      .messageSeverity = eError | eInfo | eVerbose | eWarning,
+      .messageSeverity = eError | eWarning,
       .messageType =
           ePerformance | eDeviceAddressBinding | eGeneral | eValidation,
       .pfnUserCallback = debugCallback};
@@ -190,14 +190,19 @@ vk::Extent2D chooseSwapExtent(Context &c,
   }
 }
 
-std::pair<bool, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
-                                           vk::PhysicalDevice device) {
+std::pair<int, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
+                                          vk::PhysicalDevice device) {
   Indicies indices = findQueueFamilies(surface, device);
   bool extensions_supported = checkExtensionSupport(device);
   auto swapchain_details = querySwapchainSupport(surface, device);
-  return {indices.isComplete() && extensions_supported &&
-              swapchain_details.ok(),
-          indices};
+  int score{};
+  if (!(indices.isComplete() && extensions_supported && swapchain_details.ok()))
+    return {-1, indices};
+  auto props = device.getProperties();
+  if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
+    score += 10;
+  }
+  return {score, indices};
 }
 
 void setupDevice(Context &c) {
@@ -205,11 +210,14 @@ void setupDevice(Context &c) {
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
   const vk::raii::PhysicalDevice *chosen = nullptr;
+  int chosen_score = 0;
   Indicies indicies;
   for (auto &ph : phys_devices) {
-    if (auto [cond, i] = isDeviceSuitable(*c.surface, *ph); cond) {
+    if (auto [score, i] = isDeviceSuitable(*c.surface, *ph);
+        score > chosen_score) {
       chosen = &ph;
       indicies = i;
+      chosen_score = score;
       break;
     }
   }
@@ -508,22 +516,35 @@ void Context::recreateSwapchain() {
 Renderer::Renderer(Context &c)
     : device(*c.device), queues(c.queues), pass(nullptr),
       descriptor_layout(nullptr), layout(nullptr), pipeline(nullptr),
-      pool(nullptr), desc_pool(nullptr), image_available_sem(nullptr),
-      render_done_sem(nullptr), inflight_fen(nullptr),
-      swapchain_extent(c.swapchain_extent) {
+      pool(nullptr), desc_pool(nullptr), image_available_sem{},
+      render_done_sem{}, inflight_fen{}, swapchain_extent(c.swapchain_extent) {
   setupRenderpass(c, *this);
   setupFramebuffers(c, *this);
   setupShaderAndPipeline(c, *this);
   setupPool(c, *this);
   setupDescPool(c, *this);
-  image_available_sem =
-      vk::raii::Semaphore(c.device, device.createSemaphore({}));
-  render_done_sem = vk::raii::Semaphore(c.device, device.createSemaphore({}));
-  inflight_fen = vk::raii::Fence(
-      c.device,
-      device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled}));
+  for (auto &available : image_available_sem) {
+    available = (*c.device).createSemaphore({});
+  }
+  for (auto &done : render_done_sem) {
+    done = (*c.device).createSemaphore({});
+  }
+  for (auto &in_flight : inflight_fen) {
+    in_flight =
+        (*c.device).createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
+  }
 }
-Renderer::~Renderer() {}
+Renderer::~Renderer() {
+  for (auto sem : image_available_sem) {
+    device.destroySemaphore(sem);
+  }
+  for (auto sem : render_done_sem) {
+    device.destroySemaphore(sem);
+  }
+  for (auto fence : inflight_fen) {
+    device.destroyFence(fence);
+  }
+}
 
 void Renderer::recreateFramebuffers(Context &c) {
   framebuffers.clear();
