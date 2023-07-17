@@ -1,5 +1,5 @@
 .PHONEY = all clean
-INCLUDE = -Iinclude -I.
+INCLUDE = -Iinclude -I. -Iexternal/tuplet/include
 FLAGS = -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
 `sdl2-config --cflags` -fno-omit-frame-pointer -flto=thin
