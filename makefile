@@ -19,8 +19,6 @@ all: build/partsim
 clean:
 	rm -rdf build
 
-include $(DEPS)
-
 build/vulkan.hpp.pch:
 	clang++ $(CPPFLAGS) -x c++-header /usr/include/vulkan/vulkan.hpp -o $@
 
@@ -45,7 +43,7 @@ build/%.d: %.c*
 
 build/shaders/vert.spv: shaders/shader.vert
 	@mkdir -p $(@D)
-	glslangValidator $^  -V100 -gVS -o $@
+	glslangValidator $^ --quiet -V100 -gVS -o $@
 
 build/vert.hpp: build/shaders/vert.spv
 	@xxd -i $^ $@
@@ -53,8 +51,10 @@ build/vert.hpp: build/shaders/vert.spv
 
 build/shaders/frag.spv: shaders/shader.frag
 	@mkdir -p $(@D)
-	glslangValidator $^  -V100 -gVS -o $@
+	glslangValidator $^ --quiet -V100 -gVS -o $@
 
 build/frag.hpp: build/shaders/frag.spv
 	@xxd -i $^ $@
 	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
+
+include $(DEPS)
