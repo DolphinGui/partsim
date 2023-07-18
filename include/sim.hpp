@@ -24,8 +24,8 @@ constexpr inline int calcSectorSize(int objects, int sectors) {
 }
 
 struct WorldState {
-  constexpr static int objects = 10;
-  constexpr static int sector_count_x = 2, sector_count_y = 2,
+  constexpr static int objects = 30;
+  constexpr static int sector_count_x = 3, sector_count_y = 3,
                        sector_count = sector_count_x * sector_count_y;
   using Sector = std::array<glm::vec2, calcSectorSize(objects, sector_count)>;
 
@@ -43,27 +43,29 @@ struct WorldState {
   void process();
   void write(void *dst);
 
-  inline std::span<Sector> locations(bool swap = false) {
-    if (is_swap != swap)
-      return std::span<Sector>(locations_vec.data() + sector_count,
-                               sector_count);
-    else
-      return std::span<Sector>(locations_vec.data(), sector_count);
+  inline std::span<glm::vec2> locations(size_t index) {
+    auto i = index + (is_swap ? sector_count : 0);
+    return std::span(locations_vec[i].data(), counts_vec[i]);
   }
 
-  inline std::span<Sector> velocities(bool swap = false) {
-    if (is_swap != swap)
-      return std::span<Sector>(velocities_vec.data() + sector_count,
-                               sector_count);
-    else
-      return std::span<Sector>(velocities_vec.data(), sector_count);
+  inline std::span<Sector> location_sectors(bool swap = false) {
+    auto offset = (is_swap != swap) ? sector_count : 0;
+    return std::span(locations_vec.data() + offset, sector_count);
+  }
+
+  inline std::span<glm::vec2> velocities(size_t index) {
+    auto i = index + (is_swap ? sector_count : 0);
+    return std::span(velocities_vec[i].data(), counts_vec[i]);
+  }
+
+  inline std::span<Sector> velocity_sectors(bool swap = false) {
+    auto offset = (is_swap != swap) ? sector_count : 0;
+    return std::span(velocities_vec.data() + offset, sector_count);
   }
 
   inline std::span<size_t> counts(bool swap = false) {
-    if (is_swap != swap)
-      return std::span<size_t>(counts_vec.data() + sector_count, sector_count);
-    else
-      return std::span<size_t>(counts_vec.data(), sector_count);
+    auto offset = (is_swap != swap) ? sector_count : 0;
+    return std::span(counts_vec.data() + offset, sector_count);
   }
   void print();
 };

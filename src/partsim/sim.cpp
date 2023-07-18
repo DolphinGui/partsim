@@ -19,20 +19,19 @@ glm::vec2 gen_s(float x, float y) {
 int signrand() { return std::rand() - RAND_MAX / 2; }
 
 glm::vec2 gen_v() {
-  return {3.0 * signrand() / float(RAND_MAX),
-          3.0 * signrand() / float(RAND_MAX)};
+  return {1.0 * signrand() / float(RAND_MAX),
+          1.0 * signrand() / float(RAND_MAX)};
 }
 int indexVec(glm::vec2 s) {
-  int result = int(s.x / (WorldState::max_x / WorldState::sector_count_x)) +
-               int(s.y / (WorldState::max_y / WorldState::sector_count_y)) *
-                   WorldState::sector_count_x;
-  if (result >= WorldState::sector_count)
-    throw std::logic_error("sector is out of bounds");
-  return result;
+  return int(s.x / (WorldState::max_x / WorldState::sector_count_x)) +
+         int(s.y / (WorldState::max_y / WorldState::sector_count_y)) *
+             WorldState::sector_count_x;
 }
 } // namespace
 WorldState::WorldState() {
-  std::srand(std::time(nullptr));
+  auto n = std::time(nullptr);
+  fmt::print("seed: {}\n", n);
+  std::srand(n);
   locations_vec.resize(sector_count * 2, {});
   velocities_vec.resize(sector_count * 2, {});
   counts_vec.resize(sector_count * 2, 0);
@@ -40,8 +39,8 @@ WorldState::WorldState() {
     auto gen = gen_s(max_x, max_y);
     int index = indexVec(gen);
     size_t &i = counts()[index];
-    locations()[index][i] = gen;
-    velocities()[index][i] = gen_v();
+    location_sectors()[index][i] = gen;
+    velocity_sectors()[index][i] = gen_v();
     i++;
   }
 }
@@ -78,10 +77,32 @@ inline void collision_check(glm::vec2 &a_s, glm::vec2 &a_v, glm::vec2 &b_s,
   }
 }
 
+using VecSpan = std::span<glm::vec2>;
+
+inline void collision_check_sector(VecSpan pos, VecSpan vel) {
+  auto size = pos.size();
+  if (size == 0)
+    return;
+  for (int a = 0; a != size - 1; a++) {
+    for (int b = a + 1; b != size; b++) {
+      collision_check(pos[a], vel[a], pos[b], vel[b]);
+    }
+  }
+}
+inline void collision_check_sectors(VecSpan pos_a, VecSpan vel_a, VecSpan pos_b,
+                                    VecSpan vel_b) {
+  for (auto &&[a_s, a_v] : zip::Range(pos_a, vel_a)) {
+    for (auto &&[b_s, b_v] : zip::Range(pos_b, vel_b)) {
+      collision_check(a_s, a_v, b_s, b_v);
+    }
+  }
+}
+
 inline void sortSector(glm::vec2 s, glm::vec2 v,
                        std::span<WorldState::Sector> other_loc,
                        std::span<WorldState::Sector> other_vec,
                        std::span<size_t> other_count) {
+
   int index = indexVec(s);
   other_loc[index][other_count[index]] = s;
   other_vec[index][other_count[index]] = v;
@@ -91,19 +112,50 @@ inline void sortSector(glm::vec2 s, glm::vec2 v,
 } // namespace
 
 void WorldState::process() {
-  for (auto &&[loc, vel, c] : zip::Range(locations(), velocities(), counts())) {
-    for (int i = 0; i != c; i++) {
-      loc[i] += vel[i];
+  for (int i = 0; i != sector_count; i++) {
+    for (auto &&[s, v] : zip::Range(locations(i), velocities(i))) {
+      s += v;
     }
   }
-  for (auto &&[loc, vel, c] : zip::Range(locations(), velocities(), counts())) {
-    for (int i = 0; i != c; i++) {
-      bounds_check(loc[i], vel[i]);
+
+  // later optimize so it only bounds checks the outer sectors
+  for (int i = 0; i != sector_count; i++) {
+    for (auto &&[s, v] : zip::Range(locations(i), velocities(i))) {
+      bounds_check(s, v);
     }
   }
-  for (auto &&[loc, vel, c] : zip::Range(locations(), velocities(), counts())) {
+
+  for (int sector = 0; sector != sector_count - sector_count_x - 1; sector++) {
+    collision_check_sector(locations(sector), velocities(sector));
+    collision_check_sectors(locations(sector), velocities(sector),
+                            locations(sector + 1), velocities(sector + 1));
+    collision_check_sectors(locations(sector), velocities(sector),
+                            locations(sector + sector_count_x),
+                            velocities(sector + sector_count_x));
+  }
+
+  for (int sector = sector_count_x - 1; sector != sector_count - 1;
+       sector += sector_count_x) {
+    collision_check_sector(locations(sector), velocities(sector));
+    collision_check_sectors(locations(sector), velocities(sector),
+                            locations(sector + sector_count_x),
+                            velocities(sector + sector_count_x));
+  }
+
+  for (int sector = sector_count - sector_count_x; sector != sector_count;
+       sector++) {
+    collision_check_sector(locations(sector), velocities(sector));
+    collision_check_sectors(locations(sector), velocities(sector),
+                            locations(sector + 1), velocities(sector + 1));
+  }
+
+  collision_check_sector(locations(sector_count - 1),
+                         velocities(sector_count - 1));
+
+  for (auto &&[loc, vel, c] :
+       zip::Range(location_sectors(), velocity_sectors(), counts())) {
     for (int i = 0; i != c; i++) {
-      sortSector(loc[i], vel[i], locations(true), velocities(true),
+      sortSector(loc[i], vel[i], location_sectors(true), velocity_sectors(true),
                  counts(true));
     }
   }
@@ -111,8 +163,8 @@ void WorldState::process() {
 
 void WorldState::write(void *dst) {
   size_t i = 0;
-  auto range = zip::Range(locations(), velocities(), counts());
-  for (auto &&[loc, vel, c] : range) {
+  for (auto &&[loc, vel, c] :
+       zip::Range(location_sectors(), velocity_sectors(), counts())) {
     auto span = std::span(loc.data(), c);
     std::memcpy((char *)dst + i, span.data(), span.size_bytes());
     i += span.size_bytes();
@@ -125,9 +177,8 @@ void WorldState::write(void *dst) {
   is_swap = !is_swap;
 }
 void WorldState::print() {
-  for (auto &&[loc, vel, c] : zip::Range(locations(), velocities(), counts())) {
-    fmt::print("{}, ", std::span(loc.data(), c));
+  for (int i = 0; i != sector_count; i++) {
+    fmt::print("sector {}: {}\n", i, locations(i));
   }
-  std::puts("");
 }
 } // namespace partsim
