@@ -1,4 +1,5 @@
 #include <SDL2/SDL_events.h>
+#include <SDL2/SDL_scancode.h>
 #include <SDL2/SDL_video.h>
 #include <chrono>
 #include <cmath>
@@ -199,9 +200,46 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
 }
 
 using FTime = std::chrono::duration<float, std::chrono::seconds::period>;
-bool processInput(Window &w, bool &resized) {
+
+struct Position {
+  float x, y;
+};
+
+inline void processKey(bool down, SDL_Scancode s, char &x, char &y) {
+  switch (s) {
+  case SDL_SCANCODE_A:
+    if (down)
+      x = 1;
+    else
+      x = 0;
+    break;
+  case SDL_SCANCODE_D:
+    if (down)
+      x = -1;
+    else
+      x = 0;
+    break;
+  case SDL_SCANCODE_W:
+    if (down)
+      y = 1;
+    else
+      y = 0;
+    break;
+  case SDL_SCANCODE_S:
+    if (down)
+      y = -1;
+    else
+      y = 0;
+    break;
+  default:
+    break;
+  }
+}
+
+bool processInput(Window &w, bool &resized, Position &p) {
   SDL_Event event;
   SDL_PollEvent(&event);
+  static char x = 0, y = 0;
   switch (event.type) {
   case SDL_WINDOWEVENT: {
     if (event.window.event == SDL_WINDOWEVENT_RESIZED)
@@ -210,8 +248,19 @@ bool processInput(Window &w, bool &resized) {
       return true;
     break;
   }
+  case SDL_KEYDOWN: {
+    processKey(true, event.key.keysym.scancode, x, y);
+    break;
   }
-
+  case SDL_KEYUP: {
+    processKey(false, event.key.keysym.scancode, x, y);
+    break;
+  }
+  default:
+    break;
+  }
+  p.x += 2.0 / 60.0 * x;
+  p.y += 2.0 / 60.0 * y;
   return event.type == SDL_QUIT ||
          (event.type == SDL_KEYDOWN &&
           event.key.keysym.scancode == SDL_SCANCODE_C &&
@@ -360,7 +409,7 @@ void updateSwapchain(Context &context, Renderer &vk) {
 } // namespace
 
 int main() {
-
+  using World = partsim::WorldState;
   auto context = Context(Window("triangles!", {.width = 1000, .height = 600}));
   auto vk = Renderer(context);
   auto cmdBuffers = vk.getCommands(frames_in_flight);
@@ -368,8 +417,8 @@ int main() {
   auto ind = createIndBuffer(context, vk);
   auto ubo_bufs = createUBOs(context, frames_in_flight);
   auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
-  auto world = partsim::WorldState();
-  auto transform = PushConstants{glm::translate(glm::mat4(1.0), {1., 1., 0})};
+  auto world = World();
+  auto pos = Position{.x = 1, .y = 1};
 
   vk.queues.mem().waitIdle();
   int curr = 0;
@@ -382,7 +431,9 @@ int main() {
   auto prev = std::chrono::high_resolution_clock::now();
   int instances = world.objects;
 
-  while (!processInput(context.window, resized)) {
+  while (!processInput(context.window, resized, pos)) {
+    auto transform =
+        PushConstants{glm::translate(glm::mat4(1.0), {pos.x, pos.y, 0})};
     auto now = std::chrono::high_resolution_clock::now();
 
     FTime delta = now - prev;
@@ -407,7 +458,7 @@ int main() {
       int width, height;
       SDL_GetWindowSize(context.window.handle, &width, &height);
       while (width == 0 && height == 0) {
-        processInput(context.window, resized);
+        processInput(context.window, resized, pos);
       }
     }
 

@@ -25,12 +25,13 @@ constexpr inline int calcSectorSize(int objects, int sectors) {
 }
 
 struct WorldState {
-  constexpr static int objects = 30;
-  constexpr static int sector_count_x = 3, sector_count_y = 3,
+  constexpr static int objects = 300;
+  constexpr static int sector_count_x = 5, sector_count_y = 5,
                        sector_count = sector_count_x * sector_count_y;
   constexpr static auto sector_size = calcSectorSize(objects, sector_count);
+  constexpr static auto excess = (sector_size * sector_count - objects) / float(objects);
 
-  constexpr static float max_x = 100, max_y = 60;
+  constexpr static float max_x = 300, max_y = 180;
   constexpr static float radius = 1.0;
 
   explicit WorldState();
