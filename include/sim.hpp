@@ -27,7 +27,8 @@ struct WorldState {
   constexpr static int objects = 30;
   constexpr static int sector_count_x = 3, sector_count_y = 3,
                        sector_count = sector_count_x * sector_count_y;
-  using Sector = std::array<glm::vec2, calcSectorSize(objects, sector_count)>;
+  constexpr static auto sector_size = calcSectorSize(objects, sector_count);
+  using Sector = std::array<glm::vec2, sector_size>;
 
   constexpr static float max_x = 100, max_y = 60;
   constexpr static float radius = 1.0;
