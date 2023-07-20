@@ -20,7 +20,7 @@ constexpr auto world_delta = ftime(chron::seconds(1)) / tick_rate;
 
 constexpr inline int calcSectorSize(int objects, int sectors) {
   return objects / sectors +
-         constmath::ceil(3.5 * constmath::sqrt(double(objects) / sectors *
+         constmath::ceil(1 * constmath::sqrt(double(objects) / sectors *
                                                (1.0 - 1.0 / sectors)));
 }
 
