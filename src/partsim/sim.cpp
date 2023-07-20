@@ -156,25 +156,25 @@ inline void sortExtras(glm::vec2 &s, glm::vec2 &v, WorldState &w) {
 
 void WorldState::process() {
   for (int i = 0; i != sector_count; i++) {
-    for (auto &&[s, v] : zip::Range(locations(i), velocities(i))) {
+    for (auto &&[s, v] : range(i)) {
       s += v;
     }
   }
 
   [[unlikely]] if (!extra_locations.empty()) {
-    for (auto &&[s, v] : zip::Range(extra_locations, extra_velocities)) {
+    for (auto &&[s, v] : extraRange()) {
       s += v;
     }
   }
   // later optimize so it only bounds checks the outer sectors
   for (int i = 0; i != sector_count; i++) {
-    for (auto &&[s, v] : zip::Range(locations(i), velocities(i))) {
+    for (auto &&[s, v] : range(i)) {
       bounds_check(s, v);
     }
   }
 
   [[unlikely]] if (!extra_locations.empty()) {
-    for (auto &&[s, v] : zip::Range(extra_locations, extra_velocities)) {
+    for (auto &&[s, v] : extraRange()) {
       bounds_check(s, v);
     }
   }
