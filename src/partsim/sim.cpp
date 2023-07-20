@@ -37,7 +37,7 @@ int indexVec(glm::vec2 s, WorldState &w) {
 }
 } // namespace
 WorldState::WorldState() {
-  auto n = 1689711473;
+  auto n = std::time({});
   fmt::print("seed: {}\n", n);
   std::srand(n);
   locations_vec.resize(sector_count * 2, {});
@@ -46,7 +46,7 @@ WorldState::WorldState() {
   extra_locations.reserve(20);
   extra_velocities.reserve(20);
   for (int _ = 0; _ != objects; _++) {
-    auto gen = gen_s(max_x / 2, max_y / 2);
+    auto gen = gen_s(max_x, max_y);
     int index = indexVec(gen, *this);
     size_t &i = counts()[index];
     if (i >= sector_size) {
@@ -139,20 +139,17 @@ inline void sortSector(glm::vec2 s, glm::vec2 v,
   count++;
 }
 
-inline void sortExtras(glm::vec2 s, glm::vec2 v,
-                       std::span<WorldState::Sector> other_loc,
-                       std::span<WorldState::Sector> other_vec,
-                       std::span<size_t> other_count, WorldState &w) {
+inline void sortExtras(glm::vec2 &s, glm::vec2 &v, WorldState &w) {
   int index = indexVec(s, w);
-  auto &count = other_count[index];
-  [[unlikely]] if (count > WorldState::sector_size) {
-    w.extra_locations.push_back(s);
-    w.extra_velocities.push_back(v);
-    return;
-  }
-  other_loc[index][count] = s;
-  other_vec[index][count] = v;
+  auto &count = w.counts()[index];
+  [[likely]] if (count >= WorldState::sector_size - 1) { return; }
+  w.location_sectors()[index][count] = s;
+  w.velocity_sectors()[index][count] = v;
   count++;
+  s = w.extra_locations.back();
+  v = w.extra_velocities.back();
+  w.extra_locations.pop_back();
+  w.extra_velocities.pop_back();
 }
 
 } // namespace
@@ -211,18 +208,8 @@ void WorldState::process() {
   collision_check_sector(locations(sector_count - 1),
                          velocities(sector_count - 1), *this);
 
-  auto size = extra_locations.size();
-  for (int i = 0; i != size; i++) {
-    int index = indexVec(extra_locations[i], *this);
-    auto &count = counts()[index];
-    [[likely]] if (count >= sector_size - 1) { continue; }
-    location_sectors()[index][count] = extra_locations[i];
-    velocity_sectors()[index][count] = extra_velocities[i];
-    count++;
-    extra_locations[i] = extra_locations.back();
-    extra_velocities[i] = extra_velocities.back();
-    extra_locations.pop_back();
-    extra_velocities.pop_back();
+  for (auto &&[s, v] : zip::Range(extra_locations, extra_velocities)) {
+    sortExtras(s, v, *this);
   }
 
   for (int sector = 0; sector != sector_count; sector++) {
