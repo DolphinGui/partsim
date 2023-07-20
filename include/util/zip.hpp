@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bits/iterator_concepts.h>
 #include <concepts>
 #include <fmt/core.h>
 #include <iterator>
@@ -125,6 +126,13 @@ template <typename... Its> struct Range {
         begins.iterators, ends.iterators);
 
     return result;
+  }
+
+  constexpr auto operator[](size_t index)
+    requires(std::random_access_iterator<Its> && ...)
+  {
+    return begins.iterators.map(
+        [&](auto &&it) -> decltype(*it) { return *(it + index); });
   }
 
   Iterator<Its...> begins;
