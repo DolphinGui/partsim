@@ -1,7 +1,6 @@
 #pragma once
 #include "queues.hpp"
 #include "win_setup.hpp"
-#include <vulkan/vulkan_raii.hpp>
 
 struct Indicies {
   int graphics = -1, transfer = -1, present = -1;
@@ -20,14 +19,13 @@ struct Context {
 
   Window window;
 
-  vk::raii::Context context;
-  vk::raii::Instance instance;
-  vk::raii::DebugUtilsMessengerEXT debug_messager;
-  vk::raii::SurfaceKHR surface;
-  vk::raii::Device device;
+  vk::Instance instance;
+  vk::DebugUtilsMessengerEXT debug_messager;
+  vk::SurfaceKHR surface;
+  vk::Device device;
   Queues queues;
-  vk::raii::SwapchainKHR swapchain;
-  std::vector<vk::raii::ImageView> views;
+  vk::SwapchainKHR swapchain;
+  std::vector<vk::ImageView> views;
 
   vk::Extent2D swapchain_extent;
   vk::Format format;
@@ -47,13 +45,13 @@ struct Renderer {
 
   vk::Device device;
   Queues queues;
-  vk::raii::RenderPass pass;
-  std::vector<vk::raii::Framebuffer> framebuffers;
-  vk::raii::DescriptorSetLayout descriptor_layout;
-  vk::raii::PipelineLayout layout;
-  vk::raii::Pipeline pipeline;
-  vk::raii::CommandPool pool;
-  vk::raii::DescriptorPool desc_pool;
+  vk::RenderPass pass;
+  std::vector<vk::Framebuffer> framebuffers;
+  vk::DescriptorSetLayout descriptor_layout;
+  vk::PipelineLayout layout;
+  vk::Pipeline pipeline;
+  vk::CommandPool pool;
+  vk::DescriptorPool desc_pool;
 
   std::array<vk::Semaphore, frames_in_flight> image_available_sem,
       render_done_sem;

@@ -7,7 +7,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "build/frag.hpp"
@@ -15,6 +14,7 @@
 #include "context.hpp"
 #include "queues.hpp"
 #include "ubo.hpp"
+#include "util/scope_guard.hpp"
 #include "validation.hpp"
 #include "vertex.hpp"
 #include "vkformat.hpp"
@@ -47,7 +47,7 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
   return VK_FALSE;
 }
 
-vk::raii::Instance setupInstance(vk::raii::Context &context, Window &win) {
+vk::Instance setupInstance(Window &win) {
 
   if (enableValidation && !check_validation_support()) {
     throw std::runtime_error("validation layers requested, but not available!");
@@ -70,11 +70,10 @@ vk::raii::Instance setupInstance(vk::raii::Context &context, Window &win) {
       .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
       .ppEnabledExtensionNames = extensions.data()};
 
-  return vk::raii::Instance(context, vk::createInstance(createInfo));
+  return vk::createInstance(createInfo);
 }
 
-vk::raii::DebugUtilsMessengerEXT
-setupDebug(const vk::raii::Instance &instance) {
+vk::DebugUtilsMessengerEXT setupDebug(vk::Instance instance) {
   if (!enableValidation)
     return nullptr;
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
@@ -91,14 +90,14 @@ setupDebug(const vk::raii::Instance &instance) {
   if (auto func = (PFN_vkCreateDebugUtilsMessengerEXT)instance.getProcAddr(
           "vkCreateDebugUtilsMessengerEXT")) {
     result = vk::Result(
-        func(*instance, (const VkDebugUtilsMessengerCreateInfoEXT *)&createInfo,
+        func(instance, (const VkDebugUtilsMessengerCreateInfoEXT *)&createInfo,
              nullptr, &messenger));
   }
 
   if (result != vk::Result::eSuccess)
     throw std::runtime_error(vk::to_string(result));
 
-  return vk::raii::DebugUtilsMessengerEXT(instance, messenger);
+  return messenger;
 }
 
 Indicies findQueueFamilies(vk::SurfaceKHR surface, vk::PhysicalDevice phys) {
@@ -206,14 +205,14 @@ std::pair<int, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
 }
 
 void setupDevice(Context &c) {
-  auto phys_devices = vk::raii::PhysicalDevices(c.instance);
+  auto phys_devices = c.instance.enumeratePhysicalDevices();
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
-  const vk::raii::PhysicalDevice *chosen = nullptr;
+  const vk::PhysicalDevice *chosen = nullptr;
   int chosen_score = 0;
   Indicies indicies;
   for (auto &ph : phys_devices) {
-    if (auto [score, i] = isDeviceSuitable(*c.surface, *ph);
+    if (auto [score, i] = isDeviceSuitable(c.surface, ph);
         score > chosen_score) {
       chosen = &ph;
       indicies = i;
@@ -230,7 +229,7 @@ void setupDevice(Context &c) {
   if (present != graphics)
     throw std::runtime_error(
         "Seperate graphics and present queue not supported");
-  c.phys = **chosen;
+  c.phys = *chosen;
 
   float queuePriority = 1.0f;
   vk::DeviceQueueCreateInfo queueCreateInfo{.queueFamilyIndex =
@@ -254,19 +253,14 @@ void setupDevice(Context &c) {
     createInfo.enabledLayerCount = 0;
   }
 
-  c.device = vk::raii::Device(*chosen, createInfo);
-  c.queues.set_graphics(c.device.getQueue(graphics, 0).release());
-  c.queues.set_transfer(c.device.getQueue(transfer, 0).release());
-}
-
-vk::raii::SurfaceKHR setupSurface(Window &window,
-                                  vk::raii::Instance &instance) {
-  return {instance, window.getSurface(*instance)};
+  c.device = chosen->createDevice(createInfo);
+  c.queues.set_graphics(c.device.getQueue(graphics, 0));
+  c.queues.set_transfer(c.device.getQueue(transfer, 0));
 }
 
 vk::Format setupSwapchain(Context &c) {
   SwapChainSupportDetails swapchain_support =
-      querySwapchainSupport(*c.surface, c.phys);
+      querySwapchainSupport(c.surface, c.phys);
   vk::SurfaceFormatKHR surface_format =
       chooseSwapSurfaceFormat(swapchain_support.formats);
   c.format = surface_format.format;
@@ -280,7 +274,7 @@ vk::Format setupSwapchain(Context &c) {
   }
 
   auto info = vk::SwapchainCreateInfoKHR{
-      .surface = *c.surface,
+      .surface = c.surface,
       .minImageCount = image_count,
       .imageFormat = surface_format.format,
       .imageColorSpace = surface_format.colorSpace,
@@ -297,17 +291,15 @@ vk::Format setupSwapchain(Context &c) {
 }
 
 void setupShaderAndPipeline(Context &c, Renderer &r) {
-  auto frag = vk::raii::ShaderModule(
-      c.device,
-      vk::ShaderModuleCreateInfo{.codeSize = build_shaders_frag_spv_len,
-                                 .pCode = reinterpret_cast<const uint32_t *>(
-                                     &build_shaders_frag_spv)});
 
-  auto vert = vk::raii::ShaderModule(
-      c.device,
-      vk::ShaderModuleCreateInfo{.codeSize = build_shaders_vert_spv_len,
-                                 .pCode = reinterpret_cast<const uint32_t *>(
-                                     &build_shaders_vert_spv)});
+  auto frag = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
+      .codeSize = build_shaders_frag_spv_len,
+      .pCode = reinterpret_cast<const uint32_t *>(&build_shaders_frag_spv)});
+  auto frag_guard = ScopeGuard([&]() { c.device.destroyShaderModule(frag); });
+  auto vert = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
+      .codeSize = build_shaders_vert_spv_len,
+      .pCode = reinterpret_cast<const uint32_t *>(&build_shaders_vert_spv)});
+  auto vert_guard = ScopeGuard([&]() { c.device.destroyShaderModule(vert); });
 
   //  for now do not do scaling. May use scaling for font or something later.
   ScreenScale scale = {1 / 50.0, 1 / 30.0};
@@ -326,12 +318,12 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
 
   std::array shader_stages = {vk::PipelineShaderStageCreateInfo{
                                   .stage = vk::ShaderStageFlagBits::eVertex,
-                                  .module = *vert,
+                                  .module = vert,
                                   .pName = "main",
                                   .pSpecializationInfo = &specialization_info},
                               vk::PipelineShaderStageCreateInfo{
                                   .stage = vk::ShaderStageFlagBits::eFragment,
-                                  .module = *frag,
+                                  .module = frag,
                                   .pName = "main"}};
 
   vk::PipelineVertexInputStateCreateInfo vert_in_info{};
@@ -390,7 +382,7 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
 
   vk::PipelineLayoutCreateInfo pipeline_layout_info{
       .setLayoutCount = 1,
-      .pSetLayouts = &*r.descriptor_layout,
+      .pSetLayouts = &r.descriptor_layout,
       .pushConstantRangeCount = 1,
       .pPushConstantRanges = &push_constant};
 
@@ -406,11 +398,16 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
       .pMultisampleState = &multisampling,
       .pColorBlendState = &colorblending,
       .pDynamicState = &dynamicState,
-      .layout = *r.layout,
-      .renderPass = *r.pass,
+      .layout = r.layout,
+      .renderPass = r.pass,
       .subpass = 0};
-
-  r.pipeline = c.device.createGraphicsPipeline(nullptr, pipeline_info);
+  if (auto &&[err, result] =
+          c.device.createGraphicsPipeline(nullptr, pipeline_info);
+      err == vk::Result::eSuccess) {
+    r.pipeline = result;
+  } else {
+    throw std::runtime_error(vk::to_string(err));
+  }
 }
 
 void setupRenderpass(Context &c, Renderer &r) {
@@ -452,7 +449,7 @@ void setupRenderpass(Context &c, Renderer &r) {
 }
 
 void setupViews(Context &c) {
-  std::vector<vk::Image> images = c.swapchain.getImages();
+  std::vector<vk::Image> images = c.device.getSwapchainImagesKHR(c.swapchain);
   c.views.reserve(images.size());
   for (int i = 0; i != images.size(); i++) {
     c.views.push_back(c.device.createImageView(vk::ImageViewCreateInfo{
@@ -470,9 +467,9 @@ void setupViews(Context &c) {
 void setupFramebuffers(Context &c, Renderer &r) {
   for (int i = 0; i != c.views.size(); i++) {
     r.framebuffers.push_back(c.device.createFramebuffer(
-        vk::FramebufferCreateInfo{.renderPass = *r.pass,
+        vk::FramebufferCreateInfo{.renderPass = r.pass,
                                   .attachmentCount = 1,
-                                  .pAttachments = &*c.views[i],
+                                  .pAttachments = &c.views[i],
                                   .width = c.swapchain_extent.width,
                                   .height = c.swapchain_extent.height,
                                   .layers = 1}));
@@ -494,16 +491,27 @@ void setupDescPool(Context &c, Renderer &r) {
 } // namespace
 
 Context::Context(Window &&win)
-    : window(std::move(win)), context{},
-      instance(setupInstance(context, window)),
+    : window(std::move(win)), instance(setupInstance(window)),
       debug_messager(setupDebug(instance)),
-      surface(setupSurface(window, instance)), device(nullptr),
+      surface(window.getSurface(instance)), device(nullptr),
       swapchain(nullptr) {
   setupDevice(*this);
   format = setupSwapchain(*this);
   setupViews(*this);
 }
-Context::~Context() {}
+Context::~Context() {
+  for (auto view : views) {
+    device.destroyImageView(view);
+  }
+  device.destroySwapchainKHR(swapchain);
+  device.destroy();
+  instance.destroySurfaceKHR(surface);
+  if (auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)instance.getProcAddr(
+          "vkDestroyDebugUtilsMessengerEXT")) {
+    func(instance, (VkDebugUtilsMessengerEXT)debug_messager, nullptr);
+  }
+  instance.destroy();
+}
 
 void Context::recreateSwapchain() {
   device.waitIdle();
@@ -514,7 +522,7 @@ void Context::recreateSwapchain() {
 }
 
 Renderer::Renderer(Context &c)
-    : device(*c.device), queues(c.queues), pass(nullptr),
+    : device(c.device), queues(c.queues), pass(nullptr),
       descriptor_layout(nullptr), layout(nullptr), pipeline(nullptr),
       pool(nullptr), desc_pool(nullptr), image_available_sem{},
       render_done_sem{}, inflight_fen{}, swapchain_extent(c.swapchain_extent) {
@@ -524,14 +532,14 @@ Renderer::Renderer(Context &c)
   setupPool(c, *this);
   setupDescPool(c, *this);
   for (auto &available : image_available_sem) {
-    available = (*c.device).createSemaphore({});
+    available = c.device.createSemaphore({});
   }
   for (auto &done : render_done_sem) {
-    done = (*c.device).createSemaphore({});
+    done = c.device.createSemaphore({});
   }
   for (auto &in_flight : inflight_fen) {
     in_flight =
-        (*c.device).createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
+        c.device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
   }
 }
 Renderer::~Renderer() {
@@ -544,6 +552,15 @@ Renderer::~Renderer() {
   for (auto fence : inflight_fen) {
     device.destroyFence(fence);
   }
+  device.destroyDescriptorPool(desc_pool);
+  device.destroyCommandPool(pool);
+  device.destroyPipeline(pipeline);
+  device.destroyPipelineLayout(layout);
+  device.destroyDescriptorSetLayout(descriptor_layout);
+  for (auto buffer : framebuffers) {
+    device.destroyFramebuffer(buffer);
+  }
+  device.destroyRenderPass(pass);
 }
 
 void Renderer::recreateFramebuffers(Context &c) {
@@ -555,13 +572,13 @@ void Renderer::recreateFramebuffers(Context &c) {
 std::vector<vk::CommandBuffer>
 Renderer::getCommands(uint32_t number, vk::CommandBufferLevel level) {
   return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
-      .commandPool = *pool, .level = level, .commandBufferCount = number});
+      .commandPool = pool, .level = level, .commandBufferCount = number});
 }
 
 std::vector<vk::DescriptorSet> Renderer::getDescriptors(uint32_t number) {
-  std::vector<vk::DescriptorSetLayout> layouts(number, *descriptor_layout);
+  std::vector<vk::DescriptorSetLayout> layouts(number, descriptor_layout);
   return device.allocateDescriptorSets(
-      vk::DescriptorSetAllocateInfo{.descriptorPool = *desc_pool,
+      vk::DescriptorSetAllocateInfo{.descriptorPool = desc_pool,
                                     .descriptorSetCount = number,
                                     .pSetLayouts = layouts.data()});
 }

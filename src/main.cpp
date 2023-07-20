@@ -17,7 +17,6 @@
 #include <thread>
 #include <vector>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
@@ -288,20 +287,20 @@ void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
   vk::CommandBufferBeginInfo info{};
   vkassert(buffer.begin(&info));
   vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
-  buffer.beginRenderPass({.renderPass = *vk.pass,
-                          .framebuffer = *vk.framebuffers[index],
+  buffer.beginRenderPass({.renderPass = vk.pass,
+                          .framebuffer = vk.framebuffers[index],
                           .renderArea = {{0, 0}, vk.swapchain_extent},
                           .clearValueCount = 1,
                           .pClearValues = &clearColor},
                          vk::SubpassContents::eInline);
-  buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *vk.pipeline);
-  buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *vk.layout, 0,
+  buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, vk.pipeline);
+  buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, vk.layout, 0,
                             descriptor, {});
   buffer.bindVertexBuffers(0, std::array{vert.buffer},
                            std::array{vk::DeviceSize(0)});
   buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
   setScissorViewport(vk.swapchain_extent, buffer);
-  buffer.pushConstants(*vk.layout, vk::ShaderStageFlagBits::eVertex, 0,
+  buffer.pushConstants(vk.layout, vk::ShaderStageFlagBits::eVertex, 0,
                        vk::ArrayProxy<const PushConstants>(1, &constants));
   buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
   buffer.endRenderPass();
@@ -357,9 +356,9 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
 Buffer createVertBuffer(Context &vk, Renderer &r) {
   using enum vk::BufferUsageFlagBits;
   using enum vk::MemoryPropertyFlagBits;
-  auto vert = Buffer(*vk.device, vk.phys, vertices.size() * sizeof(vertices[0]),
+  auto vert = Buffer(vk.device, vk.phys, vertices.size() * sizeof(vertices[0]),
                      eVertexBuffer | eTransferDst, eDeviceLocal);
-  vert.write(*vk.device, vk.phys, r, bin(vertices));
+  vert.write(vk.device, vk.phys, r, bin(vertices));
 
   return vert;
 }
@@ -367,9 +366,9 @@ Buffer createVertBuffer(Context &vk, Renderer &r) {
 Buffer createIndBuffer(Context &vk, Renderer &r) {
   using enum vk::BufferUsageFlagBits;
   using enum vk::MemoryPropertyFlagBits;
-  auto vert = Buffer(*vk.device, vk.phys, indices.size() * sizeof(indices[0]),
+  auto vert = Buffer(vk.device, vk.phys, indices.size() * sizeof(indices[0]),
                      eIndexBuffer | eTransferDst, eDeviceLocal);
-  vert.write(*vk.device, vk.phys, r, bin(indices));
+  vert.write(vk.device, vk.phys, r, bin(indices));
 
   return vert;
 }
@@ -378,7 +377,7 @@ std::vector<UBOBuffer> createUBOs(Context &vk, int count) {
   std::vector<UBOBuffer> result;
   result.reserve(count);
   for (int i = 0; i != count; i++) {
-    result.emplace_back(*vk.device, vk.phys, sizeof(UniformBuffer));
+    result.emplace_back(vk.device, vk.phys, sizeof(UniformBuffer));
   }
   return result;
 }
@@ -447,7 +446,7 @@ int main() {
 
     total_time += delta;
     try {
-      draw(vk, *context.swapchain, cmdBuffers[curr], vert, ind, descs,
+      draw(vk, context.swapchain, cmdBuffers[curr], vert, ind, descs,
            instances, transform, curr);
     } catch (UpdateSwapchainException e) {
       resized = true;
