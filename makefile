@@ -14,7 +14,7 @@ $(BACKENDS)/imgui_impl_sdl2.cpp
 OBJ :=  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
 BUILD_DIR  := build
 # yes this is absolutely unportable no I cant find a better way around it
-DEPS :=$(shell find $(BUILD_DIR) -type f -name "*.d"  -print 2> /dev/null)
+DEPS :=$(addsuffix .d, $(basename $(SRCS)))
 
 all: build/partsim
 
@@ -47,4 +47,4 @@ build/frag.hpp: build/shaders/frag.spv
 	@xxd -i $^ $@
 	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
 
-include $(DEPS)
+-include $(DEPS)
