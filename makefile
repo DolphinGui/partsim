@@ -1,5 +1,5 @@
-.PHONEY := all clean
-INCLUDE := -Iinclude -I. -Iexternal/tuplet/include
+.PHONEY := all clean ec
+INCLUDE := -Iinclude -I. -Iexternal/tuplet/include -Iexternal/imgui
 FLAGS := -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
 `sdl2-config --cflags` -flto=thin
@@ -7,13 +7,19 @@ DEP_FLAGS =  -MMD -MF $(addsuffix .d,$(basename $@))
 CPPFLAGS := -std=c++20 $(INCLUDE) $(FLAGS)
 LDFLAGS := -lfmt -lvulkan `sdl2-config --libs` -flto=thin
 CXX := clang++
-SRCS := $(shell find src/ -type f -name '*.cpp')
+BACKENDS := external/imgui/backends
+SRCS = $(shell find src/ -type f -name '*.cpp') \
+$(wildcard external/imgui/*.cpp) $(BACKENDS)/imgui_impl_sdl2.cpp \
+$(BACKENDS)/imgui_impl_sdl2.cpp
 OBJ :=  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
 BUILD_DIR  := build
 # yes this is absolutely unportable no I cant find a better way around it
 DEPS :=$(shell find $(BUILD_DIR) -type f -name "*.d"  -print 2> /dev/null)
 
 all: build/partsim
+
+ec:
+	echo $(SRCS)
 
 clean:
 	rm -rdf build
@@ -41,5 +47,4 @@ build/frag.hpp: build/shaders/frag.spv
 	@xxd -i $^ $@
 	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
 
-include external/imgui.mk
 include $(DEPS)
