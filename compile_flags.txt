@@ -1,6 +1,8 @@
 -I.
 -Iinclude
 -Iexternal/tuplet/include
+-Iexternal/imgui
+-Iexternal
 -std=c++20
 -DGLFW_EXPOSE_NATIVE_WAYLAND
 -DVK_USE_PLATFORM_WAYLAND_KHR

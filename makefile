@@ -1,5 +1,5 @@
-.PHONEY := all clean ec
-INCLUDE := -Iinclude -I. -Iexternal/tuplet/include -Iexternal/imgui
+.PHONEY := all clean
+INCLUDE := -Iinclude -I. -Iexternal/tuplet/include -Iexternal/imgui -Iexternal
 FLAGS := -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
 `sdl2-config --cflags` -flto=thin
@@ -12,14 +12,9 @@ SRCS = $(shell find src/ -type f -name '*.cpp') \
 $(wildcard external/imgui/*.cpp) $(BACKENDS)/imgui_impl_sdl2.cpp \
 $(BACKENDS)/imgui_impl_sdl2.cpp
 OBJ :=  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
-BUILD_DIR  := build
-# yes this is absolutely unportable no I cant find a better way around it
 DEPS :=$(addsuffix .d, $(basename $(SRCS)))
 
 all: build/partsim
-
-ec:
-	echo $(SRCS)
 
 clean:
 	rm -rdf build

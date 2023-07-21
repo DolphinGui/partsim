@@ -483,10 +483,23 @@ void setupPool(Context &c, Renderer &r) {
 }
 
 void setupDescPool(Context &c, Renderer &r) {
-  vk::DescriptorPoolSize poolSize{.type = vk::DescriptorType::eUniformBuffer,
-                                  .descriptorCount = 2};
+  using desc = vk::DescriptorPoolSize;
+  // this is just what the imgui example says I really don't think
+  // allocating this much is actually necessary
+  std::array pool_sizes = {
+      desc{vk::DescriptorType::eSampler, 1000},
+      desc{vk::DescriptorType::eCombinedImageSampler, 1000},
+      desc{vk::DescriptorType::eSampledImage, 1000},
+      desc{vk::DescriptorType::eStorageImage, 1000},
+      desc{vk::DescriptorType::eUniformTexelBuffer, 1000},
+      desc{vk::DescriptorType::eStorageTexelBuffer, 1000},
+      desc{vk::DescriptorType::eUniformBuffer, 1000},
+      desc{vk::DescriptorType::eStorageBuffer, 1000},
+      desc{vk::DescriptorType::eUniformBufferDynamic, 1000},
+      desc{vk::DescriptorType::eStorageBufferDynamic, 1000},
+      desc{vk::DescriptorType::eInputAttachment, 1000}};
   r.desc_pool = c.device.createDescriptorPool(
-      {.maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &poolSize});
+      {.maxSets = 1000, .poolSizeCount = pool_sizes.size(), .pPoolSizes = pool_sizes.data()});
 }
 } // namespace
 
@@ -524,8 +537,8 @@ void Context::recreateSwapchain() {
 Renderer::Renderer(Context &c)
     : device(c.device), queues(c.queues), pass(nullptr),
       descriptor_layout(nullptr), layout(nullptr), pipeline(nullptr),
-      pool(nullptr), desc_pool(nullptr), image_available_sem{},
-      render_done_sem{}, inflight_fen{}, swapchain_extent(c.swapchain_extent) {
+      pool(nullptr), image_available_sem{}, render_done_sem{}, inflight_fen{},
+      swapchain_extent(c.swapchain_extent) {
   setupRenderpass(c, *this);
   setupFramebuffers(c, *this);
   setupShaderAndPipeline(c, *this);
