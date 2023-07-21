@@ -1,4 +1,4 @@
-.PHONEY := all clean ec
+.PHONEY := all clean
 INCLUDE := -Iinclude -I. -Iexternal/tuplet/include
 FLAGS := -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
@@ -15,8 +15,8 @@ DEPS :=$(shell find $(BUILD_DIR) -type f -name "*.d"  -print 2> /dev/null)
 
 all: build/partsim
 
-ec:
-	echo $(DEPS)
+clean:
+	rm -rdf build
 
 build/partsim: $(OBJ)
 	$(CXX) $^ $(LDFLAGS) -o $@
@@ -41,4 +41,5 @@ build/frag.hpp: build/shaders/frag.spv
 	@xxd -i $^ $@
 	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
 
+include external/imgui.mk
 include $(DEPS)
