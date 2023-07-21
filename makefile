@@ -1,42 +1,29 @@
-.PHONEY = all clean
-INCLUDE = -Iinclude -I. -Iexternal/tuplet/include
-FLAGS = -fPIC -fexceptions -g -O3 \
+.PHONEY := all clean ec
+INCLUDE := -Iinclude -I. -Iexternal/tuplet/include
+FLAGS := -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
-`sdl2-config --cflags` -fno-omit-frame-pointer -flto=thin
-CPPFLAGS = -std=c++20 $(INCLUDE) $(FLAGS)
-CFLAGS = -std=c11 $(INCLUDE) $(FLAGS)
-LDFLAGS = -lfmt -lvulkan `sdl2-config --libs` -flto=thin
-CC = clang
-CXX = clang++
-C_SRCS =  $(shell find src/ -type f -name '*.c')
-CPP_SRCS = $(shell find src/ -type f -name '*.cpp')
-SRCS = $(C_SRCS) $(CPP_SRCS)
-OBJ =  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
-DEPS = $(addprefix build/, $(addsuffix .d, $(basename $(SRCS))))
+`sdl2-config --cflags` -flto=thin
+DEP_FLAGS =  -MMD -MF $(addsuffix .d,$(basename $@))
+CPPFLAGS := -std=c++20 $(INCLUDE) $(FLAGS)
+LDFLAGS := -lfmt -lvulkan `sdl2-config --libs` -flto=thin
+CXX := clang++
+SRCS := $(shell find src/ -type f -name '*.cpp')
+OBJ :=  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
+BUILD_DIR  := build
+# yes this is absolutely unportable no I cant find a better way around it
+DEPS :=$(shell find $(BUILD_DIR) -type f -name "*.d"  -print 2> /dev/null)
 
 all: build/partsim
 
-clean:
-	rm -rdf build
-
-build/vulkan.hpp.pch:
-	clang++ $(CPPFLAGS) -x c++-header /usr/include/vulkan/vulkan.hpp -o $@
+ec:
+	echo $(DEPS)
 
 build/partsim: $(OBJ)
-	$(CXX) $^ $(LDFLAGS) -o build/partsim
+	$(CXX) $^ $(LDFLAGS) -o $@
 
-# pch header must be included manually otherwise pch needs itself
-build/src/%.o: src/%.cpp build/vulkan.hpp.pch
-	$(CXX) -c $(CPPFLAGS) -include-pch build/vulkan.hpp.pch $< -o $@
-
-build/src/%.o: src/%.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-build/%.d: %.c*
+build/%.o: %.cpp build/vert.hpp build/frag.hpp
 	@mkdir -p $(@D)
-	@set -e rm -f $@
-	@$(CC) -MM -MG $(INCLUDE) $< -o $@
-	@sed -i '1s/^/$(subst /,\/,$@) $(subst /,\/, $(@D))\//' $@
+	$(CXX) -c $(CPPFLAGS) $(DEP_FLAGS) $< -o $@
 
 build/shaders/vert.spv: shaders/shader.vert
 	@mkdir -p $(@D)
