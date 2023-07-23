@@ -35,6 +35,7 @@ GUI::GUI(Context &c, Renderer &vk) : device(c.device) {
   ImGuiIO &io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
   ImGui::StyleColorsDark();
 
   ImGui_ImplSDL2_InitForVulkan(c.window.handle);

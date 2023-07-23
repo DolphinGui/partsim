@@ -341,14 +341,15 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
                                       .pSignalSemaphores = signalSemaphores}};
   c.queues.render().submit(submit, c.inflight_fen[index]);
 
-  vk::PresentInfoKHR presentInfo{};
-  vk::SwapchainKHR swapChains[] = {swapchain};
-  presentInfo.waitSemaphoreCount = 1;
-  presentInfo.pWaitSemaphores = signalSemaphores;
-  presentInfo.swapchainCount = 1;
-  presentInfo.pSwapchains = swapChains;
-  presentInfo.pImageIndices = &imageIndex;
-  vkassert(c.queues.render().presentKHR(presentInfo));
+  // ImGui::UpdatePlatformWindows();
+  // ImGui::RenderPlatformWindowsDefault();
+
+  vk::SwapchainKHR swap_chains[] = {swapchain};
+  vkassert(c.queues.render().presentKHR({.waitSemaphoreCount = 1,
+                                 .pWaitSemaphores = signalSemaphores,
+                                 .swapchainCount = 1,
+                                 .pSwapchains = swap_chains,
+                                 .pImageIndices = &imageIndex}));
 }
 
 Buffer createVertBuffer(Context &vk, Renderer &r) {
