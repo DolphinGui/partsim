@@ -1,5 +1,11 @@
 #pragma once
+
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_handles.hpp>
+
 #include "queues.hpp"
+#include "util/scope_guard.hpp"
+#include "util/vkassert.hpp"
 #include "win_setup.hpp"
 
 struct Indicies {
@@ -36,6 +42,20 @@ struct Context {
 struct Renderer {
   Renderer(Context &);
   void recreateFramebuffers(Context &);
+  void execute_immediately(auto &&F) {
+    auto cmd = device.allocateCommandBuffers(
+        {.commandPool = pool,
+         .level = vk::CommandBufferLevel::ePrimary,
+         .commandBufferCount = 1});
+    auto guard = ScopeGuard([&]() { device.freeCommandBuffers(pool, cmd); });
+    vk::CommandBufferBeginInfo info{};
+    vkassert(cmd.front().begin(&info));
+    F(cmd.front());
+    cmd.front().end();
+    queues.render().submit(vk::SubmitInfo{.commandBufferCount = 1,
+                                          .pCommandBuffers = &cmd.front()});
+    queues.render().waitIdle();
+  }
   ~Renderer();
 
   std::vector<vk::CommandBuffer>

@@ -20,8 +20,10 @@
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
+#include "gui.hpp"
 #include "sim.hpp"
 #include "ubo.hpp"
+#include "util/vkassert.hpp"
 #include "vertex.hpp"
 #include "win_setup.hpp"
 
@@ -38,11 +40,6 @@ uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
   }
 
   throw std::runtime_error("failed to find suitable memory type!");
-}
-
-void vkassert(vk::Result r) {
-  if (r != vk::Result::eSuccess && r != vk::Result::eSuboptimalKHR)
-    throw std::runtime_error(vk::to_string(r));
 }
 
 struct Buffer {
@@ -238,6 +235,7 @@ inline void processKey(bool down, SDL_Scancode s, char &x, char &y) {
 bool processInput(Window &w, bool &resized, Position &p) {
   SDL_Event event;
   SDL_PollEvent(&event);
+  ImGui_ImplSDL2_ProcessEvent(&event);
   static char x = 0, y = 0;
   switch (event.type) {
   case SDL_WINDOWEVENT: {
@@ -303,6 +301,7 @@ void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
   buffer.pushConstants(vk.layout, vk::ShaderStageFlagBits::eVertex, 0,
                        vk::ArrayProxy<const PushConstants>(1, &constants));
   buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
+  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), buffer);
   buffer.endRenderPass();
   buffer.end();
 }
@@ -325,7 +324,6 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
   c.device.resetFences(c.inflight_fen[index]);
 
   buffer.reset();
-  // c.pool.reset();
   render(c, buffer, imageIndex, vert, ind,
          descriptors[imageIndex % descriptors.size()], instance_count,
          constants);
@@ -411,6 +409,7 @@ int main() {
   using World = partsim::WorldState;
   auto context = Context(Window("triangles!", {.width = 1000, .height = 600}));
   auto vk = Renderer(context);
+  auto gui = GUI(context, vk);
   auto cmdBuffers = vk.getCommands(frames_in_flight);
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
@@ -446,8 +445,15 @@ int main() {
 
     total_time += delta;
     try {
-      draw(vk, context.swapchain, cmdBuffers[curr], vert, ind, descs,
-           instances, transform, curr);
+      ImGui_ImplVulkan_NewFrame();
+      ImGui_ImplSDL2_NewFrame(context.window.handle);
+
+      ImGui::NewFrame();
+      ImGui::ShowDemoWindow();
+      ImGui::EndFrame();
+      ImGui::Render();
+      draw(vk, context.swapchain, cmdBuffers[curr], vert, ind, descs, instances,
+           transform, curr);
     } catch (UpdateSwapchainException e) {
       resized = true;
     }

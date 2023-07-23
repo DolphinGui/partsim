@@ -9,8 +9,13 @@ struct Context;
 struct Renderer;
 
 struct GUI {
-  ImGui_ImplVulkanH_Window win;
+  vk::DescriptorPool imgui_pool;
   vk::Device device;
+
   GUI(Context &c, Renderer &vk);
   ~GUI();
+  GUI(GUI &&other) : imgui_pool(other.imgui_pool), device(other.device) {
+    other.imgui_pool = nullptr;
+    other.device = nullptr;
+  }
 };
