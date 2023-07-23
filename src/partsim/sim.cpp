@@ -22,8 +22,8 @@ glm::vec2 gen_s(float x, float y) {
 int signrand() { return std::rand() - RAND_MAX / 2; }
 
 glm::vec2 gen_v() {
-  return {1.0 * signrand() / float(RAND_MAX),
-          1.0 * signrand() / float(RAND_MAX)};
+  return {20 * world_delta.count() * signrand() / float(RAND_MAX),
+          20 * world_delta.count() * signrand() / float(RAND_MAX)};
 }
 int indexVec(glm::vec2 s, WorldState &w) {
   int i = int(s.x / (WorldState::max_x / WorldState::sector_count_x)) +

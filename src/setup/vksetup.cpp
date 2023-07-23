@@ -17,7 +17,7 @@
 #include "util/scope_guard.hpp"
 #include "validation.hpp"
 #include "vertex.hpp"
-#include "vkformat.hpp"
+#include "util/vkformat.hpp"
 #include "win_setup.hpp"
 
 namespace {

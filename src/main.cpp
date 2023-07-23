@@ -21,6 +21,7 @@
 
 #include "context.hpp"
 #include "gui.hpp"
+#include "imgui.h"
 #include "sim.hpp"
 #include "ubo.hpp"
 #include "util/vkassert.hpp"
@@ -239,10 +240,13 @@ bool processInput(Window &w, bool &resized, Position &p) {
   static char x = 0, y = 0;
   switch (event.type) {
   case SDL_WINDOWEVENT: {
-    if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+    if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
       resized = true;
-    else if (event.window.event == SDL_WINDOWEVENT_CLOSE)
+    } else if (event.window.event == SDL_WINDOWEVENT_CLOSE &&
+               event.window.windowID == SDL_GetWindowID(w.handle)) {
+      fmt::print("quit requested\n");
       return true;
+    }
     break;
   }
   case SDL_KEYDOWN: {
@@ -324,6 +328,7 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
   c.device.resetFences(c.inflight_fen[index]);
 
   buffer.reset();
+  
   render(c, buffer, imageIndex, vert, ind,
          descriptors[imageIndex % descriptors.size()], instance_count,
          constants);
@@ -339,17 +344,15 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
                                       .pCommandBuffers = &buffer,
                                       .signalSemaphoreCount = 1,
                                       .pSignalSemaphores = signalSemaphores}};
-  c.queues.render().submit(submit, c.inflight_fen[index]);
 
-  // ImGui::UpdatePlatformWindows();
-  // ImGui::RenderPlatformWindowsDefault();
+  c.queues.render().submit(submit, c.inflight_fen[index]);
 
   vk::SwapchainKHR swap_chains[] = {swapchain};
   vkassert(c.queues.render().presentKHR({.waitSemaphoreCount = 1,
-                                 .pWaitSemaphores = signalSemaphores,
-                                 .swapchainCount = 1,
-                                 .pSwapchains = swap_chains,
-                                 .pImageIndices = &imageIndex}));
+                                         .pWaitSemaphores = signalSemaphores,
+                                         .swapchainCount = 1,
+                                         .pSwapchains = swap_chains,
+                                         .pImageIndices = &imageIndex}));
 }
 
 Buffer createVertBuffer(Context &vk, Renderer &r) {
@@ -436,8 +439,8 @@ int main() {
     auto now = std::chrono::high_resolution_clock::now();
 
     FTime delta = now - prev;
-    if (delta < FTime(1.0 / 60.0)) {
-      std::this_thread::sleep_for(FTime(1.0 / 60.0) - delta);
+    if (delta < partsim::world_delta) {
+      std::this_thread::sleep_for(partsim::world_delta - delta);
       auto now = std::chrono::high_resolution_clock::now();
       delta = now - prev;
     }
