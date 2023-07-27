@@ -2,10 +2,10 @@
 INCLUDE := -Iinclude -I. -Iexternal/tuplet/include -Iexternal/imgui -Iexternal
 FLAGS := -fPIC -fexceptions -g -O3 \
 -DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
-`sdl2-config --cflags` -flto=thin
+`sdl2-config --cflags`
 DEP_FLAGS =  -MMD -MF $(addsuffix .d,$(basename $@))
 CPPFLAGS := -std=c++20 $(INCLUDE) $(FLAGS)
-LDFLAGS := -lfmt -lvulkan `sdl2-config --libs` -flto=thin
+LDFLAGS := -lfmt -lvulkan `sdl2-config --libs`
 CXX := clang++
 BACKENDS := external/imgui/backends
 SRCS = $(shell find src/ -type f -name '*.cpp') \
