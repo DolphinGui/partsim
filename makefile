@@ -22,24 +22,14 @@ clean:
 build/partsim: $(OBJ)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-build/%.o: %.cpp build/vert.hpp build/frag.hpp
+build/%.o: %.cpp
 	@mkdir -p $(@D)
 	$(CXX) -c $(CPPFLAGS) $(DEP_FLAGS) $< -o $@
 
-build/shaders/vert.spv: shaders/shader.vert
+build/src/setup/vksetup.o: build/vert.hpp build/frag.hpp build/comp.hpp
+
+build/%.hpp: shaders/*.%
 	@mkdir -p $(@D)
-	glslangValidator $^ --quiet -V100 -gVS -o $@
-
-build/vert.hpp: build/shaders/vert.spv
-	@xxd -i $^ $@
-	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
-
-build/shaders/frag.spv: shaders/shader.frag
-	@mkdir -p $(@D)
-	glslangValidator $^ --quiet -V100 -gVS -o $@
-
-build/frag.hpp: build/shaders/frag.spv
-	@xxd -i $^ $@
-	@sed -i '1s/^/#pragma once \ninline constexpr /' $@
+	glslangValidator $^ --quiet -V100 --vn $(basename $(notdir $@)) -o $@
 
 -include $(DEPS)
