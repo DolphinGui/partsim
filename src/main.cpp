@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
@@ -202,35 +203,45 @@ struct Position {
   float x, y;
 };
 
-inline void processKey(bool down, SDL_Scancode s, char &x, char &y) {
+inline void processKey(bool press_down, SDL_Scancode s, char &x, char &y) {
+  static bool up{}, down{}, left{}, right{};
   switch (s) {
   case SDL_SCANCODE_A:
-    if (down)
-      x = 1;
+    if (press_down)
+      left = true;
     else
-      x = 0;
+      left = false;
     break;
   case SDL_SCANCODE_D:
-    if (down)
-      x = -1;
+    if (press_down)
+      right = true;
     else
-      x = 0;
+      right = false;
     break;
   case SDL_SCANCODE_W:
-    if (down)
-      y = 1;
+    if (press_down)
+      up = true;
     else
-      y = 0;
+      up = false;
     break;
   case SDL_SCANCODE_S:
-    if (down)
-      y = -1;
+    if (press_down)
+      down = true;
     else
-      y = 0;
+      down = false;
     break;
   default:
     break;
   }
+  x = 0, y = 0;
+  if (left)
+    x--;
+  if (right)
+    x++;
+  if (up)
+    y++;
+  if (down)
+    y--;
 }
 
 bool processInput(Window &w, bool &resized, Position &p) {
@@ -328,7 +339,7 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
   c.device.resetFences(c.inflight_fen[index]);
 
   buffer.reset();
-  
+
   render(c, buffer, imageIndex, vert, ind,
          descriptors[imageIndex % descriptors.size()], instance_count,
          constants);
@@ -420,7 +431,7 @@ int main() {
   auto ubo_bufs = createUBOs(context, frames_in_flight);
   auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
   auto world = World();
-  auto pos = Position{.x = 1, .y = 1};
+  auto pos = Position{.x = -1, .y = 1};
 
   vk.queues.mem().waitIdle();
   int curr = 0;
@@ -435,7 +446,7 @@ int main() {
 
   while (!processInput(context.window, resized, pos)) {
     auto transform =
-        PushConstants{glm::translate(glm::mat4(1.0), {pos.x, pos.y, 0})};
+        PushConstants{glm::translate(glm::mat4(1.0), {-pos.x, pos.y, 0})};
     auto now = std::chrono::high_resolution_clock::now();
 
     FTime delta = now - prev;
