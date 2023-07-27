@@ -198,7 +198,6 @@ std::pair<int, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
   if (!(indices.isComplete() && extensions_supported && swapchain_details.ok()))
     return {-1, indices};
   auto props = device.getProperties();
-  fmt::print("device: {}\n", props.deviceName);
   if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
     score += 10;
   }
