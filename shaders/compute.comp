@@ -1,0 +1,17 @@
+#version 450
+
+layout (local_size_x = 256) in;
+
+const uint count = 2;
+
+layout(set = 0, binding = 0) buffer worldstate{
+    vec2 vel[count];
+    vec2 pos[count];
+} data;
+
+void main() {
+	uint id = gl_GlobalInvocationID.x;
+  if(id < count){
+    data.pos[id] += data.vel[id];
+  }
+}

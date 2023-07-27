@@ -8,8 +8,7 @@ layout(binding = 0) uniform UniformBufferObject {
     vec4[1024] dir;
 } ubo;
 
-layout( push_constant ) uniform constants
-{
+layout( push_constant ) uniform constants {
     mat4 render_matrix;
 } push;
 

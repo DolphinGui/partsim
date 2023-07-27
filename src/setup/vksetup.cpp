@@ -9,16 +9,21 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
-#include "build/frag.hpp"
-#include "build/vert.hpp"
 #include "context.hpp"
 #include "queues.hpp"
+#include "sim.hpp"
 #include "ubo.hpp"
 #include "util/scope_guard.hpp"
 #include "util/vkformat.hpp"
 #include "validation.hpp"
 #include "vertex.hpp"
 #include "win_setup.hpp"
+
+namespace shaders {
+#include "build/comp.hpp"
+#include "build/frag.hpp"
+#include "build/vert.hpp"
+} // namespace shaders
 
 namespace {
 
@@ -111,6 +116,9 @@ Indicies findQueueFamilies(vk::SurfaceKHR surface, vk::PhysicalDevice phys) {
     if (property.queueFlags & vk::QueueFlagBits::eTransfer &&
         i.transfer == -1) {
       i.transfer = index;
+    }
+    if (property.queueFlags & vk::QueueFlagBits::eCompute && i.compute == -1) {
+      i.compute = index;
     }
     if (phys.getSurfaceSupportKHR(index, surface) && i.present == -1) {
       i.present = index;
@@ -221,7 +229,7 @@ void setupDevice(Context &c) {
     }
   }
   c.indicies = indicies;
-  auto &[graphics, present, transfer] = indicies;
+  auto &[graphics, present, transfer, comp] = indicies;
 
   if (!chosen)
     throw std::runtime_error("Could not find a vulkan-compatable device!");
@@ -293,15 +301,12 @@ vk::Format setupSwapchain(Context &c) {
 void setupShaderAndPipeline(Context &c, Renderer &r) {
 
   auto frag = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
-      .codeSize = build_shaders_frag_spv_len,
-      .pCode = reinterpret_cast<const uint32_t *>(&build_shaders_frag_spv)});
+      .codeSize = sizeof(shaders::frag), .pCode = shaders::frag});
   auto frag_guard = ScopeGuard([&]() { c.device.destroyShaderModule(frag); });
   auto vert = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
-      .codeSize = build_shaders_vert_spv_len,
-      .pCode = reinterpret_cast<const uint32_t *>(&build_shaders_vert_spv)});
+      .codeSize = sizeof(shaders::vert), .pCode = shaders::vert});
   auto vert_guard = ScopeGuard([&]() { c.device.destroyShaderModule(vert); });
 
-  //  for now do not do scaling. May use scaling for font or something later.
   ScreenScale scale = {1 / 50.0, 1 / 30.0};
   std::array spec_map{
       vk::SpecializationMapEntry{.constantID = 0,
@@ -404,10 +409,48 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
   if (auto &&[err, result] =
           c.device.createGraphicsPipeline(nullptr, pipeline_info);
       err == vk::Result::eSuccess) {
-    r.pipeline = result;
+    r.graphics_pipe = result;
   } else {
     throw std::runtime_error(vk::to_string(err));
   }
+}
+
+void setupCompute(Context &c, Renderer &r) {
+  auto comp = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
+      .codeSize = sizeof(shaders::comp), .pCode = shaders::comp});
+  auto guard = ScopeGuard([&]() { c.device.destroyShaderModule(comp); });
+
+  unsigned count = partsim::WorldState::objects;
+  std::array spec_map{vk::SpecializationMapEntry{
+      .constantID = 0, .offset = 0, .size = sizeof(count)}};
+
+  vk::SpecializationInfo specialization_info{.mapEntryCount = spec_map.size(),
+                                             .pMapEntries = spec_map.data(),
+                                             .dataSize = sizeof(count),
+                                             .pData = &count};
+
+  vk::DescriptorSetLayoutBinding worldstate{
+      .binding = 0,
+      .descriptorType = vk::DescriptorType::eStorageBuffer,
+      .descriptorCount = 1,
+      .stageFlags = vk::ShaderStageFlagBits::eCompute};
+
+  r.compute_desc_layout = r.device.createDescriptorSetLayout(
+      {.bindingCount = 1, .pBindings = &worldstate});
+
+  r.compute_layout = r.device.createPipelineLayout(
+      {.setLayoutCount = 1, .pSetLayouts = &r.compute_desc_layout});
+
+  auto [result, pipeline] = r.device.createComputePipeline(
+      nullptr, {.stage = {.stage = vk::ShaderStageFlagBits::eCompute,
+                          .module = comp,
+                          .pName = "main",
+                          .pSpecializationInfo = &specialization_info},
+                .layout = r.compute_layout});
+  if (result != vk::Result::eSuccess) {
+    throw std::runtime_error(vk::to_string(result));
+  }
+  r.compute_pipe = pipeline;
 }
 
 void setupRenderpass(Context &c, Renderer &r) {
@@ -477,7 +520,7 @@ void setupFramebuffers(Context &c, Renderer &r) {
 }
 
 void setupPool(Context &c, Renderer &r) {
-  r.pool = c.device.createCommandPool(
+  r.cmd_pool = c.device.createCommandPool(
       {.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
        .queueFamilyIndex = static_cast<uint32_t>(c.indicies.graphics)});
 }
@@ -522,13 +565,11 @@ void Context::recreateSwapchain() {
 }
 
 Renderer::Renderer(Context &c)
-    : device(c.device), queues(c.queues), pass(nullptr),
-      descriptor_layout(nullptr), layout(nullptr), pipeline(nullptr),
-      pool(nullptr), image_available_sem{}, render_done_sem{}, inflight_fen{},
-      swapchain_extent(c.swapchain_extent) {
+    : device(c.device), queues(c.queues), swapchain_extent(c.swapchain_extent) {
   setupRenderpass(c, *this);
   setupFramebuffers(c, *this);
   setupShaderAndPipeline(c, *this);
+  setupCompute(c, *this);
   setupPool(c, *this);
   setupDescPool(c, *this);
   for (auto &available : image_available_sem) {
@@ -553,10 +594,13 @@ Renderer::~Renderer() {
     device.destroyFence(fence);
   }
   device.destroyDescriptorPool(desc_pool);
-  device.destroyCommandPool(pool);
-  device.destroyPipeline(pipeline);
+  device.destroyCommandPool(cmd_pool);
+  device.destroyPipeline(graphics_pipe);
   device.destroyPipelineLayout(layout);
   device.destroyDescriptorSetLayout(descriptor_layout);
+  device.destroyPipeline(compute_pipe);
+  device.destroyPipelineLayout(compute_layout);
+  device.destroyDescriptorSetLayout(compute_desc_layout);
   for (auto buffer : framebuffers) {
     device.destroyFramebuffer(buffer);
   }
@@ -572,7 +616,7 @@ void Renderer::recreateFramebuffers(Context &c) {
 std::vector<vk::CommandBuffer>
 Renderer::getCommands(uint32_t number, vk::CommandBufferLevel level) {
   return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
-      .commandPool = pool, .level = level, .commandBufferCount = number});
+      .commandPool = cmd_pool, .level = level, .commandBufferCount = number});
 }
 
 std::vector<vk::DescriptorSet> Renderer::getDescriptors(uint32_t number) {

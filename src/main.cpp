@@ -306,7 +306,7 @@ void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
                           .clearValueCount = 1,
                           .pClearValues = &clearColor},
                          vk::SubpassContents::eInline);
-  buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, vk.pipeline);
+  buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, vk.graphics_pipe);
   buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, vk.layout, 0,
                             descriptor, {});
   buffer.bindVertexBuffers(0, std::array{vert.buffer},
@@ -425,13 +425,15 @@ int main() {
   auto context = Context(Window("triangles!", {.width = 1000, .height = 600}));
   auto vk = Renderer(context);
   auto gui = GUI(context, vk);
-  auto cmdBuffers = vk.getCommands(frames_in_flight);
+  auto cmd_buffers = vk.getCommands(frames_in_flight * 2);
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
   auto ubo_bufs = createUBOs(context, frames_in_flight);
   auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
   auto world = World();
   auto pos = Position{.x = -1, .y = 1};
+
+  // cmd_buffers[0].bindsto;
 
   vk.queues.mem().waitIdle();
   int curr = 0;
@@ -467,7 +469,7 @@ int main() {
       ImGui::ShowDemoWindow();
       ImGui::EndFrame();
       ImGui::Render();
-      draw(vk, context.swapchain, cmdBuffers[curr], vert, ind, descs, instances,
+      draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, descs, instances,
            transform, curr);
     } catch (UpdateSwapchainException e) {
       resized = true;
