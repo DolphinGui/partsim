@@ -15,9 +15,9 @@
 #include "queues.hpp"
 #include "ubo.hpp"
 #include "util/scope_guard.hpp"
+#include "util/vkformat.hpp"
 #include "validation.hpp"
 #include "vertex.hpp"
-#include "util/vkformat.hpp"
 #include "win_setup.hpp"
 
 namespace {
@@ -194,10 +194,11 @@ std::pair<int, Indicies> isDeviceSuitable(vk::SurfaceKHR surface,
   Indicies indices = findQueueFamilies(surface, device);
   bool extensions_supported = checkExtensionSupport(device);
   auto swapchain_details = querySwapchainSupport(surface, device);
-  int score{};
+  int score = 1;
   if (!(indices.isComplete() && extensions_supported && swapchain_details.ok()))
     return {-1, indices};
   auto props = device.getProperties();
+  fmt::print("device: {}\n", props.deviceName);
   if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
     score += 10;
   }
@@ -208,13 +209,13 @@ void setupDevice(Context &c) {
   auto phys_devices = c.instance.enumeratePhysicalDevices();
   if (phys_devices.empty())
     throw std::runtime_error("Could not find a vulkan-compatable device!");
-  const vk::PhysicalDevice *chosen = nullptr;
+  vk::PhysicalDevice chosen = nullptr;
   int chosen_score = 0;
   Indicies indicies;
   for (auto &ph : phys_devices) {
     if (auto [score, i] = isDeviceSuitable(c.surface, ph);
         score > chosen_score) {
-      chosen = &ph;
+      chosen = ph;
       indicies = i;
       chosen_score = score;
       break;
@@ -229,7 +230,7 @@ void setupDevice(Context &c) {
   if (present != graphics)
     throw std::runtime_error(
         "Seperate graphics and present queue not supported");
-  c.phys = *chosen;
+  c.phys = chosen;
 
   float queuePriority = 1.0f;
   vk::DeviceQueueCreateInfo queueCreateInfo{.queueFamilyIndex =
@@ -253,7 +254,7 @@ void setupDevice(Context &c) {
     createInfo.enabledLayerCount = 0;
   }
 
-  c.device = chosen->createDevice(createInfo);
+  c.device = chosen.createDevice(createInfo);
   c.queues.set_graphics(c.device.getQueue(graphics, 0));
   c.queues.set_transfer(c.device.getQueue(transfer, 0));
 }
