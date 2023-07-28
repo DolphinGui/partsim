@@ -23,10 +23,10 @@
 #include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
+#include "constants.hpp"
 #include "context.hpp"
 #include "gui.hpp"
 #include "imgui.h"
-#include "sim.hpp"
 #include "ubo.hpp"
 #include "util/vkassert.hpp"
 #include "vertex.hpp"
@@ -34,9 +34,8 @@
 
 namespace {
 struct WorldS {
-  constexpr static auto count = 2;
-  glm::vec2 pos[count];
-  glm::vec2 vel[count];
+  glm::vec2 pos[world::object_count];
+  glm::vec2 vel[world::object_count];
 };
 struct UpdateSwapchainException {};
 uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
@@ -203,8 +202,6 @@ template <contiguous T> std::span<const uint8_t> bin(T in) {
 template <typename T> std::span<const uint8_t> bin_view(T in) {
   return {reinterpret_cast<const uint8_t *>(&in), sizeof(in)};
 }
-
-using FTime = std::chrono::duration<float, std::chrono::seconds::period>;
 
 struct Position {
   float x, y;
@@ -406,35 +403,6 @@ Buffer createIndBuffer(Context &vk, Renderer &r) {
   return vert;
 }
 
-std::vector<UBOBuffer> createUBOs(Context &vk, int count) {
-  std::vector<UBOBuffer> result;
-  result.reserve(count);
-  for (int i = 0; i != count; i++) {
-    result.emplace_back(vk.device, vk.phys, sizeof(UniformBuffer));
-  }
-  return result;
-}
-
-std::vector<vk::DescriptorSet> createDescs(Renderer &vk, unsigned count,
-                                           std::span<UBOBuffer> ubos) {
-  auto descs = vk.getDescriptors(count, vk.descriptor_layout);
-  for (size_t i = 0; i < frames_in_flight; i++) {
-    vk::DescriptorBufferInfo buffer_info{.buffer = ubos[i].buffer.buffer,
-                                         .offset = 0,
-                                         .range = sizeof(UniformBuffer)};
-    vk.device.updateDescriptorSets(
-        {vk::WriteDescriptorSet{.dstSet = descs[i],
-                                .dstBinding = 0,
-                                .dstArrayElement = 0,
-                                .descriptorCount = 1,
-                                .descriptorType =
-                                    vk::DescriptorType::eUniformBuffer,
-                                .pBufferInfo = &buffer_info}},
-        {});
-  }
-  return descs;
-}
-
 std::vector<vk::DescriptorSet> createWorldDescs(Renderer &vk, unsigned count,
                                                 Buffer &world) {
   auto descs = vk.getDescriptors(count, vk.compute_desc_layout);
@@ -461,7 +429,7 @@ void updateSwapchain(Context &context, Renderer &vk) {
 } // namespace
 
 int main() {
-  using World = partsim::WorldState;
+  using namespace world;
   auto context = Context(Window("triangles!", {.width = 1000, .height = 600}));
   auto vk = Renderer(context);
   auto gui = GUI(context, vk);
@@ -484,21 +452,20 @@ int main() {
   unsigned frames{};
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
-  int instances = 2;
 
   while (!processInput(context.window, resized, pos)) {
     auto transform =
         PushConstants{glm::translate(glm::mat4(1.0), {-pos.x, pos.y, 0})};
     auto now = std::chrono::high_resolution_clock::now();
 
-    FTime delta = now - prev;
-    if (delta < partsim::world_delta) {
-      std::this_thread::sleep_for(partsim::world_delta - delta);
+    FTime dt = now - prev;
+    if (dt < delta) {
+      std::this_thread::sleep_for(delta - dt);
       auto now = std::chrono::high_resolution_clock::now();
-      delta = now - prev;
+      dt = now - prev;
     }
 
-    total_time += delta;
+    total_time += dt;
     try {
       ImGui_ImplVulkan_NewFrame();
       ImGui_ImplSDL2_NewFrame(context.window.handle);
@@ -507,7 +474,7 @@ int main() {
       ImGui::ShowDemoWindow();
       ImGui::EndFrame();
       ImGui::Render();
-      draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, instances,
+      draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, object_count,
            transform, curr, world_desc);
     } catch (UpdateSwapchainException e) {
       resized = true;
