@@ -30,6 +30,6 @@ build/src/setup/vksetup.o: build/vert.hpp build/frag.hpp build/comp.hpp
 
 build/%.hpp: shaders/*.%
 	@mkdir -p $(@D)
-	glslangValidator $^ --quiet -V100 -gVS --vn $(basename $(notdir $@)) -o $@
+	glslangValidator $^ --quiet -V100 --vn $(basename $(notdir $@)) -o $@
 
 -include $(DEPS)

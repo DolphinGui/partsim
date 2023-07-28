@@ -426,6 +426,21 @@ void updateSwapchain(Context &context, Renderer &vk) {
   vk.recreateFramebuffers(context);
 }
 
+int signrand() { return std::rand() * (std::rand() % 2 ? 1 : -1); }
+WorldS genWorld() {
+  WorldS world;
+  srand(std::time(nullptr));
+  for (auto &s : world.pos) {
+    s = {world::max_x * std::rand() / float(RAND_MAX),
+         world::max_y * std::rand() / float(RAND_MAX)};
+  }
+  for (auto &v : world.vel) {
+    v = {60 * world::delta.count() * signrand() / float(RAND_MAX),
+         60 * world::delta.count() * signrand() / float(RAND_MAX)};
+  }
+  return world;
+}
+
 } // namespace
 
 int main() {
@@ -441,7 +456,7 @@ int main() {
                           eStorageBuffer | eTransferDst,
                           vk::MemoryPropertyFlagBits::eDeviceLocal);
   auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
-  auto beginning = WorldS{{{0, 0}, {3, 3}}, {{0.1, 0.1}, {0.1, 0.1}}};
+  auto beginning = genWorld();
   world_buf.write(context.device, context.phys, vk, bin_view(beginning));
   auto pos = Position{.x = -1, .y = 1};
 
