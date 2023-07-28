@@ -12,9 +12,6 @@ layout(binding = 0, std430) buffer world_in{
 void main() {
 	uint id = gl_GlobalInvocationID.x;
   if(id < count){
-    pos[id] = vel[id] + pos[id];
-  }
-  if(id == 0){
-    pos[0] = vec2(0.3, 0.4) + pos[0];
+    pos[id] = vec2(0.1, 0.1) * vel[id] + pos[id];
   }
 }

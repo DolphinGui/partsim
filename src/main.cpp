@@ -33,8 +33,10 @@
 #include "win_setup.hpp"
 
 namespace {
-struct Particle {
-  glm::vec2 s, v;
+struct WorldS {
+  constexpr static auto count = 2;
+  glm::vec2 pos[count];
+  glm::vec2 vel[count];
 };
 struct UpdateSwapchainException {};
 uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
@@ -438,7 +440,7 @@ std::vector<vk::DescriptorSet> createWorldDescs(Renderer &vk, unsigned count,
   auto descs = vk.getDescriptors(count, vk.compute_desc_layout);
   for (size_t i = 0; i < frames_in_flight; i++) {
     vk::DescriptorBufferInfo buffer_info{
-        .buffer = world.buffer, .offset = 0, .range = sizeof(Particle)};
+        .buffer = world.buffer, .offset = 0, .range = sizeof(WorldS)};
     vk.device.updateDescriptorSets(
         {{.dstSet = descs[i],
           .dstBinding = 0,
@@ -466,16 +468,13 @@ int main() {
   auto cmd_buffers = vk.getCommands(frames_in_flight);
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
-  // auto ubo_bufs = createUBOs(context, frames_in_flight);
-  // auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
   using enum vk::BufferUsageFlagBits;
-  auto world_buf = Buffer(context.device, context.phys, 2 * sizeof(Particle),
+  auto world_buf = Buffer(context.device, context.phys, 2 * sizeof(WorldS),
                           eStorageBuffer | eTransferDst,
                           vk::MemoryPropertyFlagBits::eDeviceLocal);
   auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
-  auto beginning =
-      std::to_array<Particle>({{{0, 0}, {0.5, 0.5}}, {{2, 2}, {0.1, 0.1}}});
-  world_buf.write(context.device, context.phys, vk, bin(beginning));
+  auto beginning = WorldS{{{0, 0}, {3, 3}}, {{0.1, 0.1}, {0.1, 0.1}}};
+  world_buf.write(context.device, context.phys, vk, bin_view(beginning));
   auto pos = Position{.x = -1, .y = 1};
 
   vk.queues.mem().waitIdle();
