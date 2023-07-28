@@ -4,14 +4,17 @@ layout (local_size_x = 256) in;
 
 const uint count = 2;
 
-layout(set = 0, binding = 0, std430) buffer worldstate{
-    vec2 pos[count];
-    vec2 vel[count];
+layout(binding = 0, std430) buffer world_in{
+  vec2 pos[count];
+  vec2 vel[count];
 };
 
 void main() {
 	uint id = gl_GlobalInvocationID.x;
   if(id < count){
-    pos[id] += vel[id];
+    pos[id] = vel[id] + pos[id];
+  }
+  if(id == 0){
+    pos[0] = vec2(0.3, 0.4) + pos[0];
   }
 }

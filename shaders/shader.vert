@@ -6,7 +6,7 @@ layout(location = 0) out vec3 fragColor;
 
 const uint count = 2;
 
-layout(set = 0, binding = 0, std430) buffer worldstate{
+layout(binding = 0, std430) buffer worldstate{
     vec2 pos[count];
     vec2 vel[count];
 };
