@@ -4,7 +4,7 @@ layout(location = 0) in vec2 inPosition;
 
 layout(location = 0) out vec3 fragColor;
 
-const uint count = 2;
+layout (constant_id = 3) const uint count = 2;
 
 layout(binding = 0, std430) buffer worldstate{
     vec2 pos[count];

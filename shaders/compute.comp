@@ -2,7 +2,7 @@
 
 layout (local_size_x = 256) in;
 
-const uint count = 2;
+layout (constant_id = 0) const uint count = 2;
 
 layout(binding = 0, std430) buffer world_in{
   vec2 pos[count];

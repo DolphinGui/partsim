@@ -12,9 +12,9 @@
 #include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
+#include "constants.hpp"
 #include "context.hpp"
 #include "queues.hpp"
-#include "sim.hpp"
 #include "ubo.hpp"
 #include "util/scope_guard.hpp"
 #include "util/vkformat.hpp"
@@ -310,13 +310,16 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
   auto vert_guard = ScopeGuard([&]() { c.device.destroyShaderModule(vert); });
 
   ScreenScale scale = {1 / 50.0, 1 / 30.0};
+  unsigned count = world::object_count;
   std::array spec_map{
       vk::SpecializationMapEntry{.constantID = 0,
                                  .offset = offsetof(ScreenScale, width),
                                  .size = sizeof(scale.width)},
       vk::SpecializationMapEntry{.constantID = 1,
                                  .offset = offsetof(ScreenScale, height),
-                                 .size = sizeof(scale.height)}};
+                                 .size = sizeof(scale.height)},
+      vk::SpecializationMapEntry{
+          .constantID = 3, .offset = 0, .size = sizeof(count)}};
 
   vk::SpecializationInfo specialization_info{.mapEntryCount = spec_map.size(),
                                              .pMapEntries = spec_map.data(),
@@ -423,7 +426,7 @@ void setupCompute(Context &c, Renderer &r) {
       .codeSize = sizeof(shaders::comp), .pCode = shaders::comp});
   auto guard = ScopeGuard([&]() { c.device.destroyShaderModule(comp); });
 
-  unsigned count = partsim::WorldState::objects;
+  unsigned count = world::object_count;
   std::array spec_map{vk::SpecializationMapEntry{
       .constantID = 0, .offset = 0, .size = sizeof(count)}};
 
