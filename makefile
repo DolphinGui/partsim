@@ -12,7 +12,7 @@ SRCS = $(shell find src/ -type f -name '*.cpp') \
 $(wildcard external/imgui/*.cpp) $(BACKENDS)/imgui_impl_sdl2.cpp \
 $(BACKENDS)/imgui_impl_sdl2.cpp $(BACKENDS)/imgui_impl_vulkan.cpp
 OBJ :=  $(addprefix build/, $(addsuffix .o, $(basename $(SRCS))))
-DEPS :=$(addsuffix .d, $(basename $(SRCS)))
+DEPS := $(addprefix build/,$(addsuffix .d, $(basename $(SRCS))))
 
 all: build/partsim
 
