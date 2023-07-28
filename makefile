@@ -1,7 +1,7 @@
 .PHONEY := all clean
 INCLUDE := -Iinclude -I. -Iexternal/tuplet/include -Iexternal/imgui -Iexternal
 FLAGS := -fPIC -fexceptions -g -O3 \
--DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS \
+-DVK_USE_PLATFORM_WAYLAND_KHR -DVULKAN_HPP_NO_CONSTRUCTORS -DVULKAN_HPP_NO_STRUCT_SETTERS\
 `sdl2-config --cflags`
 DEP_FLAGS =  -MMD -MF $(addsuffix .d,$(basename $@))
 CPPFLAGS := -std=c++20 $(INCLUDE) $(FLAGS)

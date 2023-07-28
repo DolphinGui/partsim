@@ -15,7 +15,7 @@ template <> struct fmt::formatter<glm::vec2> {
       presentation = *it++;
 
     if (it != end && *it != '}')
-      ctx.on_error("invalid format");
+      throw "parsing error";
 
     return it;
   }

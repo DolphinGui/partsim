@@ -7,6 +7,9 @@
 #include <unordered_set>
 #include <utility>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_handles.hpp>
+#include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
@@ -45,9 +48,8 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
 
   using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
   auto severity = vk::DebugUtilsMessageSeverityFlagBitsEXT(sev);
-  if (severity & (eError | eWarning | eInfo))
-    fmt::print(stderr, "[{}][{}] {}\n", severity,
-               vk::DebugUtilsMessageTypeFlagBitsEXT(type), data->pMessage);
+  fmt::print(stderr, "[{}][{}] {}\n", severity,
+             vk::DebugUtilsMessageTypeFlagBitsEXT(type), data->pMessage);
 
   return VK_FALSE;
 }
@@ -371,14 +373,15 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
       .dynamicStateCount = dynamic_states.size(),
       .pDynamicStates = dynamic_states.data()};
 
-  vk::DescriptorSetLayoutBinding uboLayoutBinding{
-      .binding = 0,
-      .descriptorType = vk::DescriptorType::eUniformBuffer,
-      .descriptorCount = 1,
-      .stageFlags = vk::ShaderStageFlagBits::eVertex};
+  auto bindings = std::to_array<vk::DescriptorSetLayoutBinding>(
+      {{.binding = 0,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex |
+                      vk::ShaderStageFlagBits::eCompute}});
 
   r.descriptor_layout = c.device.createDescriptorSetLayout(
-      {.bindingCount = 1, .pBindings = &uboLayoutBinding});
+      {.bindingCount = bindings.size(), .pBindings = bindings.data()});
 
   vk::PushConstantRange push_constant;
   push_constant.offset = 0;
@@ -429,14 +432,15 @@ void setupCompute(Context &c, Renderer &r) {
                                              .dataSize = sizeof(count),
                                              .pData = &count};
 
-  vk::DescriptorSetLayoutBinding worldstate{
-      .binding = 0,
-      .descriptorType = vk::DescriptorType::eStorageBuffer,
-      .descriptorCount = 1,
-      .stageFlags = vk::ShaderStageFlagBits::eCompute};
+  auto bindings = std::to_array<vk::DescriptorSetLayoutBinding>(
+      {{.binding = 0,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex |
+                      vk::ShaderStageFlagBits::eCompute}});
 
   r.compute_desc_layout = r.device.createDescriptorSetLayout(
-      {.bindingCount = 1, .pBindings = &worldstate});
+      {.bindingCount = bindings.size(), .pBindings = bindings.data()});
 
   r.compute_layout = r.device.createPipelineLayout(
       {.setLayoutCount = 1, .pSetLayouts = &r.compute_desc_layout});
@@ -526,10 +530,12 @@ void setupPool(Context &c, Renderer &r) {
 }
 
 void setupDescPool(Context &c, Renderer &r) {
-  vk::DescriptorPoolSize poolSize{.type = vk::DescriptorType::eUniformBuffer,
-                                  .descriptorCount = 2};
-  r.desc_pool = c.device.createDescriptorPool(
-      {.maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &poolSize});
+  auto sizes = std::to_array<vk::DescriptorPoolSize>(
+      {{.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = 2},
+       {.type = vk::DescriptorType::eStorageBuffer, .descriptorCount = 5}});
+  r.desc_pool = c.device.createDescriptorPool({.maxSets = 5,
+                                               .poolSizeCount = sizes.size(),
+                                               .pPoolSizes = sizes.data()});
 }
 } // namespace
 
@@ -568,8 +574,8 @@ Renderer::Renderer(Context &c)
     : device(c.device), queues(c.queues), swapchain_extent(c.swapchain_extent) {
   setupRenderpass(c, *this);
   setupFramebuffers(c, *this);
-  setupShaderAndPipeline(c, *this);
   setupCompute(c, *this);
+  setupShaderAndPipeline(c, *this);
   setupPool(c, *this);
   setupDescPool(c, *this);
   for (auto &available : image_available_sem) {
@@ -617,12 +623,4 @@ std::vector<vk::CommandBuffer>
 Renderer::getCommands(uint32_t number, vk::CommandBufferLevel level) {
   return device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
       .commandPool = cmd_pool, .level = level, .commandBufferCount = number});
-}
-
-std::vector<vk::DescriptorSet> Renderer::getDescriptors(uint32_t number) {
-  std::vector<vk::DescriptorSetLayout> layouts(number, descriptor_layout);
-  return device.allocateDescriptorSets(
-      vk::DescriptorSetAllocateInfo{.descriptorPool = desc_pool,
-                                    .descriptorSetCount = number,
-                                    .pSetLayouts = layouts.data()});
 }

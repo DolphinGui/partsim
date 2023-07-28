@@ -62,7 +62,15 @@ struct Renderer {
   std::vector<vk::CommandBuffer>
   getCommands(uint32_t number,
               vk::CommandBufferLevel level = vk::CommandBufferLevel::ePrimary);
-  std::vector<vk::DescriptorSet> getDescriptors(uint32_t number);
+
+  inline std::vector<vk::DescriptorSet>
+  getDescriptors(uint32_t number, vk::DescriptorSetLayout layout) const {
+    std::vector<vk::DescriptorSetLayout> layouts(number, layout);
+    return device.allocateDescriptorSets(
+        vk::DescriptorSetAllocateInfo{.descriptorPool = desc_pool,
+                                      .descriptorSetCount = number,
+                                      .pSetLayouts = layouts.data()});
+  }
 
   vk::Device device;
   Queues queues;

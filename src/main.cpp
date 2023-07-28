@@ -19,6 +19,8 @@
 #include <thread>
 #include <vector>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "context.hpp"
@@ -31,6 +33,9 @@
 #include "win_setup.hpp"
 
 namespace {
+struct Particle {
+  glm::vec2 s, v;
+};
 struct UpdateSwapchainException {};
 uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties) {
@@ -295,10 +300,8 @@ void setScissorViewport(vk::Extent2D swapchain_extent,
 }
 
 void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
-            Buffer &ind, vk::DescriptorSet descriptor, int index_count,
+            Buffer &ind, vk::DescriptorSet world, int index_count,
             PushConstants &constants) {
-  vk::CommandBufferBeginInfo info{};
-  vkassert(buffer.begin(&info));
   vk::ClearValue clearColor = {.color = {std::array{0.0f, 0.0f, 0.0f, 1.0f}}};
   buffer.beginRenderPass({.renderPass = vk.pass,
                           .framebuffer = vk.framebuffers[index],
@@ -308,7 +311,7 @@ void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
                          vk::SubpassContents::eInline);
   buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, vk.graphics_pipe);
   buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, vk.layout, 0,
-                            descriptor, {});
+                            world, {});
   buffer.bindVertexBuffers(0, std::array{vert.buffer},
                            std::array{vk::DeviceSize(0)});
   buffer.bindIndexBuffer(ind.buffer, 0, vk::IndexType::eUint16);
@@ -318,14 +321,14 @@ void render(Renderer &vk, vk::CommandBuffer buffer, int index, Buffer &vert,
   buffer.drawIndexed(indices.size(), index_count, 0, 0, 0);
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), buffer);
   buffer.endRenderPass();
-  buffer.end();
 }
 
 vk::Result swapchain_acquire_result = vk::Result::eSuccess;
 
 void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
-          Buffer &vert, Buffer &ind, std::span<vk::DescriptorSet> descriptors,
-          int instance_count, PushConstants &constants, int index) {
+          Buffer &vert, Buffer &ind, int instance_count,
+          PushConstants &constants, int index,
+          std::span<vk::DescriptorSet> world_descs) {
   vkassert(c.device.waitForFences(c.inflight_fen[index], true, UINT64_MAX));
 
   auto [result, imageIndex] = c.device.acquireNextImageKHR(
@@ -340,9 +343,24 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
 
   buffer.reset();
 
+  vk::CommandBufferBeginInfo info{};
+  vkassert(buffer.begin(&info));
+  buffer.bindPipeline(vk::PipelineBindPoint::eCompute, c.compute_pipe);
+  buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, c.compute_layout,
+                            0, world_descs[imageIndex % world_descs.size()],
+                            {});
+  buffer.dispatch(1, 1, 1);
+  using enum vk::AccessFlagBits;
+  auto barrier = vk::MemoryBarrier{.srcAccessMask = eMemoryWrite | eMemoryRead,
+                                   .dstAccessMask = eMemoryRead};
+  buffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                         vk::PipelineStageFlagBits::eVertexShader, {}, barrier,
+                         {}, {});
+
   render(c, buffer, imageIndex, vert, ind,
-         descriptors[imageIndex % descriptors.size()], instance_count,
+         world_descs[imageIndex % world_descs.size()], instance_count,
          constants);
+  buffer.end();
 
   vk::Semaphore waitSemaphores[] = {c.image_available_sem[index]};
   vk::PipelineStageFlags waitStages[] = {
@@ -397,8 +415,8 @@ std::vector<UBOBuffer> createUBOs(Context &vk, int count) {
 
 std::vector<vk::DescriptorSet> createDescs(Renderer &vk, unsigned count,
                                            std::span<UBOBuffer> ubos) {
-  auto descs = vk.getDescriptors(count);
-  for (size_t i = 0; i < 2; i++) {
+  auto descs = vk.getDescriptors(count, vk.descriptor_layout);
+  for (size_t i = 0; i < frames_in_flight; i++) {
     vk::DescriptorBufferInfo buffer_info{.buffer = ubos[i].buffer.buffer,
                                          .offset = 0,
                                          .range = sizeof(UniformBuffer)};
@@ -414,10 +432,30 @@ std::vector<vk::DescriptorSet> createDescs(Renderer &vk, unsigned count,
   }
   return descs;
 }
+
+std::vector<vk::DescriptorSet> createWorldDescs(Renderer &vk, unsigned count,
+                                                Buffer &world) {
+  auto descs = vk.getDescriptors(count, vk.compute_desc_layout);
+  for (size_t i = 0; i < frames_in_flight; i++) {
+    vk::DescriptorBufferInfo buffer_info{
+        .buffer = world.buffer, .offset = 0, .range = sizeof(Particle)};
+    vk.device.updateDescriptorSets(
+        {{.dstSet = descs[i],
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = vk::DescriptorType::eStorageBuffer,
+          .pBufferInfo = &buffer_info}},
+        {});
+  }
+  return descs;
+}
+
 void updateSwapchain(Context &context, Renderer &vk) {
   context.recreateSwapchain();
   vk.recreateFramebuffers(context);
 }
+
 } // namespace
 
 int main() {
@@ -425,26 +463,29 @@ int main() {
   auto context = Context(Window("triangles!", {.width = 1000, .height = 600}));
   auto vk = Renderer(context);
   auto gui = GUI(context, vk);
-  auto cmd_buffers = vk.getCommands(frames_in_flight * 2);
+  auto cmd_buffers = vk.getCommands(frames_in_flight);
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
-  auto ubo_bufs = createUBOs(context, frames_in_flight);
-  auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
-  auto world = World();
+  // auto ubo_bufs = createUBOs(context, frames_in_flight);
+  // auto descs = createDescs(vk, frames_in_flight, ubo_bufs);
+  using enum vk::BufferUsageFlagBits;
+  auto world_buf = Buffer(context.device, context.phys, 2 * sizeof(Particle),
+                          eStorageBuffer | eTransferDst,
+                          vk::MemoryPropertyFlagBits::eDeviceLocal);
+  auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
+  auto beginning =
+      std::to_array<Particle>({{{0, 0}, {0.5, 0.5}}, {{2, 2}, {0.1, 0.1}}});
+  world_buf.write(context.device, context.phys, vk, bin(beginning));
   auto pos = Position{.x = -1, .y = 1};
-
-  // cmd_buffers[0].bindsto;
 
   vk.queues.mem().waitIdle();
   int curr = 0;
-  world.process();
-  world.write(ubo_bufs[curr].mapped);
 
   FTime total_time{};
   unsigned frames{};
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
-  int instances = world.objects;
+  int instances = 2;
 
   while (!processInput(context.window, resized, pos)) {
     auto transform =
@@ -457,8 +498,6 @@ int main() {
       auto now = std::chrono::high_resolution_clock::now();
       delta = now - prev;
     }
-    world.process();
-    world.write(ubo_bufs[curr].mapped);
 
     total_time += delta;
     try {
@@ -469,8 +508,8 @@ int main() {
       ImGui::ShowDemoWindow();
       ImGui::EndFrame();
       ImGui::Render();
-      draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, descs, instances,
-           transform, curr);
+      draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, instances,
+           transform, curr, world_desc);
     } catch (UpdateSwapchainException e) {
       resized = true;
     }
