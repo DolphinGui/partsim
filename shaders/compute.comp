@@ -3,15 +3,20 @@
 layout (local_size_x = 256) in;
 
 layout (constant_id = 0) const uint count = 2;
+const float max_x = 50;
+const float max_y = 30;
+const float radius = 1.0;
 
 layout(binding = 0, std430) buffer world_in{
   vec2 pos[count];
   vec2 vel[count];
 };
 
+
+
 void main() {
 	uint id = gl_GlobalInvocationID.x;
   if(id < count){
-    pos[id] = vec2(0.1, 0.1) * vel[id] + pos[id];
+    pos[id] = vel[id] + pos[id];
   }
 }
