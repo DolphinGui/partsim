@@ -319,7 +319,7 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
                                  .offset = offsetof(ScreenScale, height),
                                  .size = sizeof(scale.height)},
       vk::SpecializationMapEntry{
-          .constantID = 3, .offset = 0, .size = sizeof(count)}};
+          .constantID = 2, .offset = 0, .size = sizeof(count)}};
 
   vk::SpecializationInfo specialization_info{.mapEntryCount = spec_map.size(),
                                              .pMapEntries = spec_map.data(),

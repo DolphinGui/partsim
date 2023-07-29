@@ -2,21 +2,39 @@
 
 layout (local_size_x = 256) in;
 
-layout (constant_id = 0) const uint count = 2;
-const float max_x = 50;
-const float max_y = 30;
+layout(constant_id = 0) const uint count = 4;
+const uint size = 500;
+const float max_x = 100;
+const float max_y = 60;
 const float radius = 1.0;
 
 layout(binding = 0, std430) buffer world_in{
-  vec2 pos[count];
-  vec2 vel[count];
+  vec2 s[size];
+  vec2 v[size];
+  vec4 color[size];
 };
 
-
+void bounds_check(uint id) {
+  if (s[id].x + radius > max_x) {
+    s[id].x -= s[id].x - max_x + radius;
+    v[id].x *= -1;
+  } else if (s[id].x < radius) {
+    s[id].x -= s[id].x - radius;
+    v[id].x *= -1;
+  }
+  if (s[id].y + radius > max_y) {
+    s[id].y -= s[id].y - max_y + radius;
+    v[id].y *= -1;
+  } else if (s[id].y < radius) {
+    s[id].y -= s[id].y - radius;
+    v[id].y *= -1;
+  }
+}
 
 void main() {
 	uint id = gl_GlobalInvocationID.x;
   if(id < count){
-    pos[id] = vel[id] + pos[id];
+    s[id] += v[id];
+    bounds_check(id);
   }
 }

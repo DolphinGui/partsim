@@ -34,8 +34,9 @@
 
 namespace {
 struct WorldS {
-  glm::vec2 pos[world::object_count];
-  glm::vec2 vel[world::object_count];
+  glm::vec2 pos[500];
+  glm::vec2 vel[500];
+  glm::vec4 color[500];
 };
 struct UpdateSwapchainException {};
 uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
@@ -430,13 +431,16 @@ int signrand() { return std::rand() * (std::rand() % 2 ? 1 : -1); }
 WorldS genWorld() {
   WorldS world;
   srand(std::time(nullptr));
-  for (auto &s : world.pos) {
+  for (auto &s : std::span(world.pos).subspan(0, world::object_count)) {
     s = {world::max_x * std::rand() / float(RAND_MAX),
          world::max_y * std::rand() / float(RAND_MAX)};
   }
-  for (auto &v : world.vel) {
-    v = {60 * world::delta.count() * signrand() / float(RAND_MAX),
-         60 * world::delta.count() * signrand() / float(RAND_MAX)};
+  for (auto &v : std::span(world.vel).subspan(0, world::object_count)) {
+    v = {20 * world::delta.count() * signrand() / float(RAND_MAX),
+         20 * world::delta.count() * signrand() / float(RAND_MAX)};
+  }
+  for (auto &c : std::span(world.color).subspan(0, world::object_count)) {
+    c = glm::vec4(0.2, 0.2, 0.2, 0.2);
   }
   return world;
 }
@@ -452,7 +456,7 @@ int main() {
   auto vert = createVertBuffer(context, vk);
   auto ind = createIndBuffer(context, vk);
   using enum vk::BufferUsageFlagBits;
-  auto world_buf = Buffer(context.device, context.phys, 2 * sizeof(WorldS),
+  auto world_buf = Buffer(context.device, context.phys, sizeof(WorldS),
                           eStorageBuffer | eTransferDst,
                           vk::MemoryPropertyFlagBits::eDeviceLocal);
   auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
