@@ -40,6 +40,7 @@ void main() {
       if(i != id && distance(s[id], s[i]) < radius * 2) {
         vec2 ds = s[id] - s[i];
         v[id] -= dot(v[id] - v[i], ds) / dot(ds, ds) * ds;
+        s[id] += normalize(ds) * 0.01;
       }
     }
   }
