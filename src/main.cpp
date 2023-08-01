@@ -473,7 +473,7 @@ int main() {
   unsigned frames{};
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
-
+  int fps = 0;
   while (!processInput(context.window, resized, pos)) {
     auto transform =
         PushConstants{glm::translate(glm::mat4(1.0), {-pos.x, pos.y, 0})};
@@ -492,7 +492,7 @@ int main() {
       ImGui_ImplSDL2_NewFrame(context.window.handle);
 
       ImGui::NewFrame();
-      ImGui::ShowDemoWindow();
+      ImGui::Text("fps: %i", fps);
       ImGui::EndFrame();
       ImGui::Render();
       draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, object_count,
@@ -517,7 +517,7 @@ int main() {
     frames++;
     if (total_time > FTime(1)) {
       total_time -= FTime(1);
-      fmt::print("fps: {}\n", frames);
+      fps = frames;
       frames = 0;
     }
   }
