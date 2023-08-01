@@ -31,31 +31,16 @@ void bounds_check(inout vec2 pos, inout vec2 vel) {
   }
 }
 
-vec2 collision_check(uint a, uint b, out vec2 v_old[size]){
-  if(distance(s[a], s[b]) < radius * 2){
-    vec2 ds = s[a] - s[b];
-    color[a].r = 0.8;
-    return - dot(v[a] - v[b], ds) / dot(ds, ds) * ds;
-  }
-  color[a].r = 0.2;
-  return v[a];
-}
-
 void main() {
-  vec2 v_old[size] = v;
-	uint id = gl_GlobalInvocationID.x;
+	uint id = gl_LocalInvocationIndex;
   if(id < count){
     s[id] += v[id];
     bounds_check(s[id], v[id]);
-  }
-  if(id == 1 ){
-    v_old[id] = collision_check(id, id - 1, v_old);
-  }
-  if(id == 0){
-    v_old[id] = collision_check(id, id + 1, v_old);
-  }
-  barrier();
-  if(id < count){
-    v[id] = v_old[id];
+    for(uint i = 0; i < count; i++) {
+      if(i != id && distance(s[id], s[i]) < radius * 2) {
+        vec2 ds = s[id] - s[i];
+        v[id] -= dot(v[id] - v[i], ds) / dot(ds, ds) * ds;
+      }
+    }
   }
 }
