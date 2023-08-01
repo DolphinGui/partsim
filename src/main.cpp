@@ -19,8 +19,6 @@
 #include <thread>
 #include <vector>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "constants.hpp"
@@ -435,10 +433,14 @@ WorldS genWorld() {
     s = {world::max_x * std::rand() / float(RAND_MAX),
          world::max_y * std::rand() / float(RAND_MAX)};
   }
+  world.pos[0] = {6.8, 9};
+  world.pos[1] = {5, 5};
   for (auto &v : std::span(world.vel).subspan(0, world::object_count)) {
     v = {20 * world::delta.count() * signrand() / float(RAND_MAX),
          20 * world::delta.count() * signrand() / float(RAND_MAX)};
   }
+  world.vel[0] = {0, -world::delta.count()};
+  world.vel[1] = {0, world::delta.count()};
   for (auto &c : std::span(world.color).subspan(0, world::object_count)) {
     c = glm::vec4(0.2, 0.2, 0.2, 0.2);
   }

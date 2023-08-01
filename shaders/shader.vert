@@ -20,10 +20,10 @@ layout(binding = 0, std430) buffer worldstate{
 
 layout( push_constant ) uniform constants {
     mat4 render_matrix;
-} push;
+};
 
 void main() {
-    gl_Position =  push.render_matrix * 
+    gl_Position =  render_matrix * 
     vec4(scale * (inPosition - pos[gl_InstanceIndex]), 0.0, 1.0);
     fragColor = color[gl_InstanceIndex].xyz;
 }
