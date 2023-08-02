@@ -32,9 +32,10 @@
 
 namespace {
 struct WorldS {
-  glm::vec2 pos[500];
-  glm::vec2 vel[500];
-  glm::vec4 color[500];
+  constexpr static auto size = 5000;
+  glm::vec2 pos[size];
+  glm::vec2 vel[size];
+  glm::vec4 color[size];
 };
 struct UpdateSwapchainException {};
 uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
@@ -347,7 +348,7 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
   buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, c.compute_layout,
                             0, world_descs[imageIndex % world_descs.size()],
                             {});
-  buffer.dispatch(1, 1, 1);
+  buffer.dispatch(2, 1, 1);
   using enum vk::AccessFlagBits;
   auto barrier = vk::MemoryBarrier{.srcAccessMask = eMemoryWrite | eMemoryRead,
                                    .dstAccessMask = eMemoryRead};

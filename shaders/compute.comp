@@ -3,9 +3,9 @@
 layout (local_size_x = 256) in;
 
 layout(constant_id = 0) const uint count = 4;
-const uint size = 500;
-const float max_x = 100;
-const float max_y = 60;
+const uint size = 5000;
+const float max_x = 300;
+const float max_y = 300;
 const float radius = 1.0;
 
 layout(binding = 0, std430) buffer world_in{
@@ -32,7 +32,7 @@ void bounds_check(inout vec2 pos, inout vec2 vel) {
 }
 
 void main() {
-	uint id = gl_LocalInvocationIndex;
+	uint id = gl_LocalInvocationIndex + gl_WorkGroupID.x * 256;
   if(id < count){
     s[id] += v[id];
     bounds_check(s[id], v[id]);
