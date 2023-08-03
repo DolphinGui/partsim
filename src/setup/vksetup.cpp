@@ -419,14 +419,22 @@ void setupCompute(Context &c, Renderer &r) {
       .codeSize = shader.size_bytes(), .pCode = shader.data()});
   auto guard = ScopeGuard([&]() { c.device.destroyShaderModule(comp); });
 
-  unsigned count = world::object_count;
-  std::array spec_map{vk::SpecializationMapEntry{
-      .constantID = 0, .offset = 0, .size = sizeof(count)}};
+  auto spec_map = std::to_array<vk::SpecializationMapEntry>(
+      {{.constantID = 0,
+        .offset = offsetof(world::constants_t, obj_count),
+        .size = sizeof(world::constants.obj_count)},
+       {.constantID = 1,
+        .offset = offsetof(world::constants_t, max_x),
+        .size = sizeof(world::constants.max_x)},
+       {.constantID = 2,
+        .offset = offsetof(world::constants_t, max_y),
+        .size = sizeof(world::constants.max_y)}});
 
   vk::SpecializationInfo specialization_info{.mapEntryCount = spec_map.size(),
                                              .pMapEntries = spec_map.data(),
-                                             .dataSize = sizeof(count),
-                                             .pData = &count};
+                                             .dataSize =
+                                                 sizeof(world::constants),
+                                             .pData = &world::constants};
 
   auto bindings = std::to_array<vk::DescriptorSetLayoutBinding>(
       {{.binding = 0,

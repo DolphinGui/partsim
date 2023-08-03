@@ -348,7 +348,7 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
   buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, c.compute_layout,
                             0, world_descs[imageIndex % world_descs.size()],
                             {});
-  buffer.dispatch(2, 1, 1);
+  buffer.dispatch(world::object_count / 256 + 1, 1, 1);
   using enum vk::AccessFlagBits;
   auto barrier = vk::MemoryBarrier{.srcAccessMask = eMemoryWrite | eMemoryRead,
                                    .dstAccessMask = eMemoryRead};

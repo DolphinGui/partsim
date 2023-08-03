@@ -4,8 +4,8 @@ layout (local_size_x = 256) in;
 
 layout(constant_id = 0) const uint count = 4;
 const uint size = 5000;
-const float max_x = 300;
-const float max_y = 300;
+layout(constant_id = 1) const float max_x = 300;
+layout(constant_id = 2) const float max_y = 300;
 const float radius = 1.0;
 
 layout(binding = 0, std430) buffer world_in{
