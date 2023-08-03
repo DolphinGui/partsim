@@ -1,13 +1,13 @@
 #pragma once
 
+#include <span>
 #include <stdexcept>
 #include <vulkan/vulkan.hpp>
-#include <span>
 
 #include "context.hpp"
 
-uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
-                        vk::MemoryPropertyFlags properties) {
+inline uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
+                               vk::MemoryPropertyFlags properties) {
   auto memProperties = phys.getMemoryProperties();
   for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
     if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags &
