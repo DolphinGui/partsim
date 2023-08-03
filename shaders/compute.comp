@@ -31,16 +31,22 @@ void bounds_check(inout vec2 pos, inout vec2 vel) {
   }
 }
 
+void collision_check(inout vec2 s, inout vec2 v, vec2 s_2, vec2 v_2){
+  if(distance(s, s_2) < radius * 2) {
+    vec2 ds = s - s_2;
+    v -= dot(v - v_2, ds) / dot(ds, ds) * ds;
+    s += normalize(ds) * 0.01;
+  }
+}
+
 void main() {
 	uint id = gl_LocalInvocationIndex + gl_WorkGroupID.x * 256;
   if(id < count){
     s[id] += v[id];
     bounds_check(s[id], v[id]);
     for(uint i = 0; i < count; i++) {
-      if(i != id && distance(s[id], s[i]) < radius * 2) {
-        vec2 ds = s[id] - s[i];
-        v[id] -= dot(v[id] - v[i], ds) / dot(ds, ds) * ds;
-        s[id] += normalize(ds) * 0.01;
+      if(i != id) {
+        collision_check(s[id], v[id], s[i], v[i]);
       }
     }
   }
