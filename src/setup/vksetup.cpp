@@ -7,9 +7,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_handles.hpp>
-#include <vulkan/vulkan_structs.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
 #include "constants.hpp"
@@ -21,12 +18,6 @@
 #include "validation.hpp"
 #include "vertex.hpp"
 #include "win_setup.hpp"
-
-namespace shaders {
-#include "build/comp.hpp"
-#include "build/frag.hpp"
-#include "build/vert.hpp"
-} // namespace shaders
 
 namespace {
 
@@ -301,12 +292,13 @@ vk::Format setupSwapchain(Context &c) {
 }
 
 void setupShaderAndPipeline(Context &c, Renderer &r) {
-
+  auto f = shaders::fragment();
   auto frag = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
-      .codeSize = sizeof(shaders::frag), .pCode = shaders::frag});
+      .codeSize = f.size_bytes(), .pCode = f.data()});
   auto frag_guard = ScopeGuard([&]() { c.device.destroyShaderModule(frag); });
+  auto v = shaders::vertex();
   auto vert = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
-      .codeSize = sizeof(shaders::vert), .pCode = shaders::vert});
+      .codeSize = v.size_bytes(), .pCode = v.data()});
   auto vert_guard = ScopeGuard([&]() { c.device.destroyShaderModule(vert); });
 
   ScreenScale scale = {1 / 50.0, 1 / 30.0};
@@ -422,8 +414,9 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
 }
 
 void setupCompute(Context &c, Renderer &r) {
+  auto shader = shaders::compute();
   auto comp = c.device.createShaderModule(vk::ShaderModuleCreateInfo{
-      .codeSize = sizeof(shaders::comp), .pCode = shaders::comp});
+      .codeSize = shader.size_bytes(), .pCode = shader.data()});
   auto guard = ScopeGuard([&]() { c.device.destroyShaderModule(comp); });
 
   unsigned count = world::object_count;

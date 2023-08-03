@@ -1,7 +1,7 @@
 #pragma once
 
+#include <span>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_handles.hpp>
 
 #include "queues.hpp"
 #include "util/scope_guard.hpp"
@@ -91,3 +91,9 @@ struct Renderer {
 
   vk::Extent2D swapchain_extent;
 };
+
+namespace shaders {
+std::span<const uint32_t> vertex();
+std::span<const uint32_t> fragment();
+std::span<const uint32_t> compute();
+} // namespace shaders

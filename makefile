@@ -26,7 +26,7 @@ build/%.o: %.cpp
 	@mkdir -p $(@D)
 	$(CXX) -c $(CPPFLAGS) $(DEP_FLAGS) $< -o $@
 
-build/src/setup/vksetup.o: build/vert.hpp build/frag.hpp build/comp.hpp
+build/src/setup/shaders.o: build/vert.hpp build/frag.hpp build/comp.hpp
 
 build/%.hpp: shaders/*.%
 	@mkdir -p $(@D)
