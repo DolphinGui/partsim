@@ -188,7 +188,7 @@ bool processInput(Window &w, bool &resized, Position &p) {
   default:
     break;
   }
-  p.zoom += 0.5 * world::delta.count() * zoom;
+  p.zoom *= std::exp(world::delta.count() * zoom);
   p.x += 2.0 * world::delta.count() * x / p.zoom;
   p.y += 2.0 * world::delta.count() * y / p.zoom;
   return event.type == SDL_QUIT ||
