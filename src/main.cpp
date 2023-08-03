@@ -21,6 +21,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_to_string.hpp>
 
+#include "buffer.hpp"
 #include "constants.hpp"
 #include "context.hpp"
 #include "gui.hpp"
@@ -38,98 +39,6 @@ struct WorldS {
   glm::vec4 color[size];
 };
 struct UpdateSwapchainException {};
-uint32_t findMemoryType(vk::PhysicalDevice phys, uint32_t typeFilter,
-                        vk::MemoryPropertyFlags properties) {
-  auto memProperties = phys.getMemoryProperties();
-  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-    if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags &
-                                    properties) == properties) {
-      return i;
-    }
-  }
-
-  throw std::runtime_error("failed to find suitable memory type!");
-}
-
-struct Buffer {
-  vk::Buffer buffer{};
-  vk::DeviceMemory mem{};
-  vk::Device d{};
-  Buffer(vk::Device device, vk::PhysicalDevice phys, size_t size,
-         vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) {
-    d = device;
-    buffer = d.createBuffer({.size = size,
-                             .usage = usage,
-                             .sharingMode = vk::SharingMode::eExclusive});
-    auto mem_reqs = d.getBufferMemoryRequirements(buffer);
-
-    mem = d.allocateMemory({.allocationSize = mem_reqs.size,
-                            .memoryTypeIndex = findMemoryType(
-                                phys, mem_reqs.memoryTypeBits, properties)});
-    d.bindBufferMemory(buffer, mem, 0);
-  }
-
-  Buffer(Buffer &&other) {
-    buffer = other.buffer;
-    mem = other.mem;
-    d = other.d;
-    other.buffer = nullptr;
-    other.mem = nullptr;
-    other.d = nullptr;
-  }
-  ~Buffer() {
-    if (d) {
-      d.destroyBuffer(buffer);
-      d.freeMemory(mem);
-    }
-  }
-
-  void write(vk::Device device, vk::PhysicalDevice phys, Renderer &vk,
-             std::span<const uint8_t> data) {
-
-    using enum vk::BufferUsageFlagBits;
-    using enum vk::MemoryPropertyFlagBits;
-    auto staging = Buffer(device, phys, data.size(), eTransferSrc,
-                          eHostVisible | eHostCoherent);
-
-    auto ptr = staging.d.mapMemory(staging.mem, 0, data.size());
-    std::memcpy(ptr, data.data(), data.size());
-    staging.d.unmapMemory(staging.mem);
-
-    auto cmdBuffers = vk.getCommands(1);
-    vk::CommandBufferBeginInfo info{};
-    vkassert(cmdBuffers[0].begin(&info));
-    cmdBuffers[0].copyBuffer(staging.buffer, buffer,
-                             vk::BufferCopy{0, 0, data.size()});
-    cmdBuffers[0].end();
-    vk.queues.mem().submit(std::array{vk::SubmitInfo{
-        .commandBufferCount = 1, .pCommandBuffers = cmdBuffers.data()}});
-    vk.queues.mem().waitIdle();
-  }
-};
-
-struct UBOBuffer {
-  Buffer buffer;
-  void *mapped = nullptr;
-  size_t size = 0;
-  UBOBuffer() = delete;
-  UBOBuffer(vk::Device d, vk::PhysicalDevice phys, size_t size)
-      : buffer(d, phys, size, vk::BufferUsageFlagBits::eUniformBuffer,
-               vk::MemoryPropertyFlagBits::eHostCoherent |
-                   vk::MemoryPropertyFlagBits::eHostVisible) {
-    mapped = buffer.d.mapMemory(buffer.mem, 0, size);
-  }
-  UBOBuffer(UBOBuffer &&other)
-      : buffer(std::move(other.buffer)), mapped(other.mapped),
-        size(other.size) {}
-  ~UBOBuffer() {
-    if (buffer.d)
-      buffer.d.unmapMemory(buffer.mem);
-  }
-  template <typename T> void write(const T &data) {
-    std::memcpy(mapped, reinterpret_cast<const void *>(&data), sizeof(data));
-  }
-};
 
 constexpr auto vertices = std::to_array<Vertex>({{{1, 0}},
                                                  {{0.9921147, 0.12533323}},
@@ -204,40 +113,37 @@ template <typename T> std::span<const uint8_t> bin_view(T in) {
 }
 
 struct Position {
-  float x, y;
+  float x = -1, y = 1;
+  float zoom = 1;
 };
 
-inline void processKey(bool press_down, SDL_Scancode s, char &x, char &y) {
-  static bool up{}, down{}, left{}, right{};
+// technically this recalculates all of the binds every time
+// a button is pressed, which is a little suboptimal
+inline void processKey(bool press_down, SDL_Scancode s, char &x, char &y,
+                       char &zoom) {
+  static bool up{}, down{}, left{}, right{}, zoom_in{}, zoom_out{};
   switch (s) {
   case SDL_SCANCODE_A:
-    if (press_down)
-      left = true;
-    else
-      left = false;
+    left = press_down;
     break;
   case SDL_SCANCODE_D:
-    if (press_down)
-      right = true;
-    else
-      right = false;
+    right = press_down;
     break;
   case SDL_SCANCODE_W:
-    if (press_down)
-      up = true;
-    else
-      up = false;
+    up = press_down;
     break;
   case SDL_SCANCODE_S:
-    if (press_down)
-      down = true;
-    else
-      down = false;
+    down = press_down;
     break;
+  case SDL_SCANCODE_MINUS:
+    zoom_in = press_down;
+    break;
+  case SDL_SCANCODE_EQUALS:
+    zoom_out = press_down;
   default:
     break;
   }
-  x = 0, y = 0;
+  x = 0, y = 0, zoom = 0;
   if (left)
     x--;
   if (right)
@@ -246,13 +152,20 @@ inline void processKey(bool press_down, SDL_Scancode s, char &x, char &y) {
     y++;
   if (down)
     y--;
+  if (zoom_in)
+    zoom++;
+  if (zoom_out)
+    zoom--;
 }
 
 bool processInput(Window &w, bool &resized, Position &p) {
   SDL_Event event;
   SDL_PollEvent(&event);
   ImGui_ImplSDL2_ProcessEvent(&event);
-  static char x = 0, y = 0;
+  // auto &io = ImGui::GetIO();
+  // if (io.WantCaptureKeyboard)
+  //   return false;
+  static char x = 0, y = 0, zoom = 0;
   switch (event.type) {
   case SDL_WINDOWEVENT: {
     if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
@@ -265,18 +178,19 @@ bool processInput(Window &w, bool &resized, Position &p) {
     break;
   }
   case SDL_KEYDOWN: {
-    processKey(true, event.key.keysym.scancode, x, y);
+    processKey(true, event.key.keysym.scancode, x, y, zoom);
     break;
   }
   case SDL_KEYUP: {
-    processKey(false, event.key.keysym.scancode, x, y);
+    processKey(false, event.key.keysym.scancode, x, y, zoom);
     break;
   }
   default:
     break;
   }
-  p.x += 2.0 / 60.0 * x;
-  p.y += 2.0 / 60.0 * y;
+  p.zoom += 0.5 * world::delta.count() * zoom;
+  p.x += 2.0 * world::delta.count() * x / p.zoom;
+  p.y += 2.0 * world::delta.count() * y / p.zoom;
   return event.type == SDL_QUIT ||
          (event.type == SDL_KEYDOWN &&
           event.key.keysym.scancode == SDL_SCANCODE_C &&
@@ -465,7 +379,7 @@ int main() {
   auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
   auto beginning = genWorld();
   world_buf.write(context.device, context.phys, vk, bin_view(beginning));
-  auto pos = Position{.x = -1, .y = 1};
+  auto pos = Position();
 
   vk.queues.mem().waitIdle();
   int curr = 0;
@@ -476,8 +390,8 @@ int main() {
   auto prev = std::chrono::high_resolution_clock::now();
   int fps = 0;
   while (!processInput(context.window, resized, pos)) {
-    auto transform =
-        PushConstants{glm::translate(glm::mat4(1.0), {-pos.x, pos.y, 0})};
+    auto transform = PushConstants{glm::translate(
+        glm::scale(glm::mat4(1.0), glm::vec3(pos.zoom)), {-pos.x, pos.y, 0})};
     auto now = std::chrono::high_resolution_clock::now();
 
     FTime dt = now - prev;
@@ -494,6 +408,8 @@ int main() {
 
       ImGui::NewFrame();
       ImGui::Text("fps: %i", fps);
+      ImGui::Text("pos: (%f, %f)", pos.x, pos.y);
+      ImGui::Text("scaling: %f", pos.zoom);
       ImGui::EndFrame();
       ImGui::Render();
       draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, object_count,
