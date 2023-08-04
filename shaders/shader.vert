@@ -9,7 +9,7 @@ layout (constant_id = 0) const float scale_x = 1.0;
 layout (constant_id = 1) const float scale_y = 1.0;
 
 layout(constant_id = 2) const uint count = 4;
-const uint size = 5000;
+const uint size = 256 * 20;
 const vec2 scale = vec2(scale_x, scale_y);
 
 layout(binding = 0, std430) buffer worldstate{

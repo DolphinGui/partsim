@@ -12,6 +12,7 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <limits>
 #include <numeric>
 #include <ranges>
 #include <span>
@@ -33,7 +34,7 @@
 
 namespace {
 struct WorldS {
-  constexpr static auto size = 5000;
+  constexpr static auto size = 256 * 20;
   glm::vec2 pos[size];
   glm::vec2 vel[size];
   glm::vec4 color[size];
@@ -345,8 +346,10 @@ WorldS genWorld() {
   WorldS world;
   srand(std::time(nullptr));
   for (auto &s : std::span(world.pos).subspan(0, world::object_count)) {
-    s = {world::max_x * std::rand() / float(RAND_MAX),
-         world::max_y * std::rand() / float(RAND_MAX)};
+    s = {(world::max_x - world::radius) * std::rand() / float(RAND_MAX) +
+             world::radius,
+         (world::max_y - world::radius) * std::rand() / float(RAND_MAX) +
+             world::radius};
   }
   world.pos[0] = {6.8, 9};
   world.pos[1] = {5, 5};
@@ -376,6 +379,15 @@ int main() {
   auto world_buf = Buffer(context.device, context.phys, sizeof(WorldS),
                           eStorageBuffer | eTransferDst,
                           vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+  vk.execute_immediately([&](vk::CommandBuffer cmd) {
+    static_assert(sizeof(float) == sizeof(uint32_t),
+                  "size of float and uint32 don't match");
+    cmd.fillBuffer(
+        world_buf.buffer, 0, sizeof(WorldS),
+        std::bit_cast<uint32_t>(std::numeric_limits<float>::quiet_NaN()));
+  });
+
   auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
   auto beginning = genWorld();
   world_buf.write(context.device, context.phys, vk, bin_view(beginning));
