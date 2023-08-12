@@ -264,13 +264,6 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
                             0, world_descs[imageIndex % world_descs.size()],
                             {});
   buffer.dispatch(world::object_count / 256 + 1, 1, 1);
-  using enum vk::AccessFlagBits;
-  auto barrier = vk::MemoryBarrier{.srcAccessMask = eMemoryWrite | eMemoryRead,
-                                   .dstAccessMask = eMemoryRead};
-  buffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                         vk::PipelineStageFlagBits::eVertexShader, {}, barrier,
-                         {}, {});
-
   render(c, buffer, imageIndex, vert, ind,
          world_descs[imageIndex % world_descs.size()], instance_count,
          constants);

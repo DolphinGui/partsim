@@ -482,20 +482,20 @@ void setupRenderpass(Context &c, Renderer &r) {
       .colorAttachmentCount = 1,
       .pColorAttachments = &colorAttachmentRef};
   using enum vk::PipelineStageFlagBits;
-  vk::SubpassDependency dependency{
-      .srcSubpass = VK_SUBPASS_EXTERNAL,
-      .dstSubpass = 0,
-      .srcStageMask = eColorAttachmentOutput,
-      .dstStageMask = eColorAttachmentOutput,
-      .srcAccessMask = {},
-      .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite};
+  auto deps = std::to_array<vk::SubpassDependency>(
+      {{.srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = eColorAttachmentOutput | eComputeShader,
+        .dstStageMask = eColorAttachmentOutput,
+        .srcAccessMask = vk::AccessFlagBits::eShaderWrite,
+        .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite}});
 
   auto pass_info = vk::RenderPassCreateInfo{.attachmentCount = 1,
                                             .pAttachments = &color,
                                             .subpassCount = 1,
                                             .pSubpasses = &subpass,
-                                            .dependencyCount = 1,
-                                            .pDependencies = &dependency};
+                                            .dependencyCount = deps.size(),
+                                            .pDependencies = deps.data()};
   r.pass = c.device.createRenderPass(pass_info);
 }
 
