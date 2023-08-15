@@ -76,25 +76,27 @@ struct Buffer {
   }
 };
 
-struct UBOBuffer {
+template <typename T> struct MappedBuffer {
   Buffer buffer;
   void *mapped = nullptr;
-  size_t size = 0;
-  UBOBuffer() = delete;
-  UBOBuffer(vk::Device d, vk::PhysicalDevice phys, size_t size)
-      : buffer(d, phys, size, vk::BufferUsageFlagBits::eUniformBuffer,
+  MappedBuffer() = delete;
+  MappedBuffer(
+      vk::Device d, vk::PhysicalDevice phys,
+      vk::BufferUsageFlags type = vk::BufferUsageFlagBits::eUniformBuffer)
+      : buffer(d, phys, sizeof(T), type,
                vk::MemoryPropertyFlagBits::eHostCoherent |
                    vk::MemoryPropertyFlagBits::eHostVisible) {
-    mapped = buffer.d.mapMemory(buffer.mem, 0, size);
+    mapped = buffer.d.mapMemory(buffer.mem, 0, sizeof(T));
   }
-  UBOBuffer(UBOBuffer &&other)
-      : buffer(std::move(other.buffer)), mapped(other.mapped),
-        size(other.size) {}
-  ~UBOBuffer() {
+
+  MappedBuffer(MappedBuffer &&other)
+      : buffer(std::move(other.buffer)), mapped(other.mapped) {}
+
+  ~MappedBuffer() {
     if (buffer.d)
       buffer.d.unmapMemory(buffer.mem);
   }
-  template <typename T> void write(const T &data) {
-    std::memcpy(mapped, reinterpret_cast<const void *>(&data), sizeof(data));
-  }
+
+  void write(const T &data) { std::memcpy(mapped, &data, sizeof(T)); }
+  void read(T *out) { std::memcpy(out, mapped, sizeof(T)); }
 };

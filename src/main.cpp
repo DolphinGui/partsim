@@ -39,6 +39,10 @@ struct WorldS {
   glm::vec2 vel[size];
   glm::vec4 color[size];
 };
+struct WorldOut {
+  constexpr static auto size = 256 * 20;
+  std::array<float, size> energy;
+};
 struct UpdateSwapchainException {};
 
 constexpr auto vertices = std::to_array<Vertex>({{{1, 0}},
@@ -257,15 +261,16 @@ void draw(Renderer &c, vk::SwapchainKHR swapchain, vk::CommandBuffer buffer,
 
   buffer.reset();
 
+  auto i = imageIndex % world_descs.size();
+
   vk::CommandBufferBeginInfo info{};
   vkassert(buffer.begin(&info));
   buffer.bindPipeline(vk::PipelineBindPoint::eCompute, c.compute_pipe);
   buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, c.compute_layout,
-                            0, world_descs[imageIndex % world_descs.size()],
-                            {});
+                            0, world_descs[i], {});
+
   buffer.dispatch(world::object_count / 256 + 1, 1, 1);
-  render(c, buffer, imageIndex, vert, ind,
-         world_descs[imageIndex % world_descs.size()], instance_count,
+  render(c, buffer, imageIndex, vert, ind, world_descs[i], instance_count,
          constants);
   buffer.end();
 
@@ -311,19 +316,20 @@ Buffer createIndBuffer(Context &vk, Renderer &r) {
   return vert;
 }
 
-std::vector<vk::DescriptorSet> createWorldDescs(Renderer &vk, unsigned count,
-                                                Buffer &world) {
-  auto descs = vk.getDescriptors(count, vk.compute_desc_layout);
+std::vector<vk::DescriptorSet> createDescs(Renderer &vk, vk::Buffer world,
+                                           vk::Buffer out, uint32_t binding) {
+  auto descs = vk.getDescriptors(frames_in_flight, vk.compute_desc_layout);
   for (size_t i = 0; i < frames_in_flight; i++) {
-    vk::DescriptorBufferInfo buffer_info{
-        .buffer = world.buffer, .offset = 0, .range = sizeof(WorldS)};
+    auto buffer_info = std::to_array<vk::DescriptorBufferInfo>(
+        {{.buffer = world, .offset = 0, .range = VK_WHOLE_SIZE},
+         {.buffer = out, .offset = 0, .range = VK_WHOLE_SIZE}});
     vk.device.updateDescriptorSets(
         {{.dstSet = descs[i],
-          .dstBinding = 0,
+          .dstBinding = binding,
           .dstArrayElement = 0,
-          .descriptorCount = 1,
+          .descriptorCount = buffer_info.size(),
           .descriptorType = vk::DescriptorType::eStorageBuffer,
-          .pBufferInfo = &buffer_info}},
+          .pBufferInfo = buffer_info.data()}},
         {});
   }
   return descs;
@@ -372,16 +378,20 @@ int main() {
   auto world_buf = Buffer(context.device, context.phys, sizeof(WorldS),
                           eStorageBuffer | eTransferDst,
                           vk::MemoryPropertyFlagBits::eDeviceLocal);
+  auto w_out = MappedBuffer<WorldOut>(context.device, context.phys,
+                                      eStorageBuffer | eTransferDst);
 
   vk.execute_immediately([&](vk::CommandBuffer cmd) {
     static_assert(sizeof(float) == sizeof(uint32_t),
                   "size of float and uint32 don't match");
     cmd.fillBuffer(
-        world_buf.buffer, 0, sizeof(WorldS),
+        world_buf.buffer, 0, vk::WholeSize,
         std::bit_cast<uint32_t>(std::numeric_limits<float>::quiet_NaN()));
+    cmd.fillBuffer(w_out.buffer.buffer, 0, vk::WholeSize,
+                   std::bit_cast<uint32_t>(0.0f));
   });
 
-  auto world_desc = createWorldDescs(vk, frames_in_flight, world_buf);
+  auto world_desc = createDescs(vk, world_buf.buffer, w_out.buffer.buffer, 0);
   auto beginning = genWorld();
   world_buf.write(context.device, context.phys, vk, bin_view(beginning));
   auto pos = Position();
@@ -394,6 +404,7 @@ int main() {
   bool resized = false;
   auto prev = std::chrono::high_resolution_clock::now();
   int fps = 0;
+  WorldOut out;
   while (!processInput(context.window, resized, pos)) {
     auto transform = PushConstants{glm::translate(
         glm::scale(glm::mat4(1.0), glm::vec3(pos.zoom)), {-pos.x, pos.y, 0})};
@@ -407,6 +418,8 @@ int main() {
     }
 
     total_time += dt;
+    vk.queues.render().waitIdle();
+    w_out.read(&out);
     try {
       ImGui_ImplVulkan_NewFrame();
       ImGui_ImplSDL2_NewFrame(context.window.handle);
@@ -415,6 +428,9 @@ int main() {
       ImGui::Text("fps: %i", fps);
       ImGui::Text("pos: (%f, %f)", pos.x, pos.y);
       ImGui::Text("scaling: %f", pos.zoom);
+      float energy = std::accumulate(
+          out.energy.begin(), out.energy.begin() + world::object_count, 0.0);
+      ImGui::Text("energy: %f", energy);
       ImGui::EndFrame();
       ImGui::Render();
       draw(vk, context.swapchain, cmd_buffers[curr], vert, ind, object_count,

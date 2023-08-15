@@ -16,6 +16,10 @@ layout(binding = 0, std430) buffer world_in{
   vec4 color[size];
 };
 
+layout(binding = 1, std430) buffer world_out{
+  float energy[size];
+};
+
 void bounds_check(inout vec2 pos, inout vec2 vel) {
   if (pos.x + radius > max_x) {
     pos.x -= pos.x - max_x + radius;
@@ -35,6 +39,8 @@ void bounds_check(inout vec2 pos, inout vec2 vel) {
 
 void main() {
 	uint id = gl_LocalInvocationIndex + gl_WorkGroupID.x * 256;
+  energy[id] = length(s[id]);
+  
   if(color[id].r > 0.2){
     color[id].r -= 0.05;
   }

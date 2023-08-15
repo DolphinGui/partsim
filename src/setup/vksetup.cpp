@@ -373,6 +373,11 @@ void setupShaderAndPipeline(Context &c, Renderer &r) {
         .descriptorType = vk::DescriptorType::eStorageBuffer,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eVertex |
+                      vk::ShaderStageFlagBits::eCompute},
+       {.binding = 1,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex |
                       vk::ShaderStageFlagBits::eCompute}});
 
   r.descriptor_layout = c.device.createDescriptorSetLayout(
@@ -438,6 +443,11 @@ void setupCompute(Context &c, Renderer &r) {
 
   auto bindings = std::to_array<vk::DescriptorSetLayoutBinding>(
       {{.binding = 0,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex |
+                      vk::ShaderStageFlagBits::eCompute},
+       {.binding = 1,
         .descriptorType = vk::DescriptorType::eStorageBuffer,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eVertex |
@@ -535,9 +545,9 @@ void setupPool(Context &c, Renderer &r) {
 
 void setupDescPool(Context &c, Renderer &r) {
   auto sizes = std::to_array<vk::DescriptorPoolSize>(
-      {{.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = 2},
-       {.type = vk::DescriptorType::eStorageBuffer, .descriptorCount = 5}});
-  r.desc_pool = c.device.createDescriptorPool({.maxSets = 5,
+      {{.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = 20},
+       {.type = vk::DescriptorType::eStorageBuffer, .descriptorCount = 20}});
+  r.desc_pool = c.device.createDescriptorPool({.maxSets = 40,
                                                .poolSizeCount = sizes.size(),
                                                .pPoolSizes = sizes.data()});
 }
