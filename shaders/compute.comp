@@ -39,7 +39,9 @@ void bounds_check(inout vec2 pos, inout vec2 vel) {
 
 void main() {
 	uint id = gl_LocalInvocationIndex + gl_WorkGroupID.x * 256;
-  energy[id] = length(s[id]);
+
+  // 1/2 m * v^2
+  energy[id] = 0.5 * dot(v[id], v[id]);
   
   if(color[id].r > 0.2){
     color[id].r -= 0.05;
