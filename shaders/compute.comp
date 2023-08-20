@@ -53,11 +53,10 @@ void main() {
     if(i != id && distance(s[id], s[i]) < radius * 2) {
       color[id].r = 0.8;
       vec2 ds = s[id] - s[i];
-      delta_v = - dot(v[id] - v[i], ds) / dot(ds, ds) * ds;
-      vec2 direction = v[id] - delta_v;
+      delta_v -= dot(v[id] - v[i], ds) / dot(ds, ds) * ds;
     }
   }
-
+  memoryBarrier();
   barrier();
   v[id] += delta_v;
 }

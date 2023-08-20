@@ -356,8 +356,8 @@ WorldS genWorld() {
   world.pos[0] = {6.8, 9};
   world.pos[1] = {5, 5};
   for (auto &v : std::span(world.vel).subspan(0, world::object_count)) {
-    v = {20 * world::delta.count() * signrand() / float(RAND_MAX),
-         20 * world::delta.count() * signrand() / float(RAND_MAX)};
+    v = {2 * world::delta.count() * signrand() / float(RAND_MAX),
+         2 * world::delta.count() * signrand() / float(RAND_MAX)};
   }
   world.vel[0] = {0, -world::delta.count()};
   world.vel[1] = {0, world::delta.count()};
