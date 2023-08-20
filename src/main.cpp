@@ -344,11 +344,14 @@ int signrand() { return std::rand() * (std::rand() % 2 ? 1 : -1); }
 WorldS genWorld() {
   WorldS world;
   srand(std::time(nullptr));
+  float x = 0, y = 0;
   for (auto &s : std::span(world.pos).subspan(0, world::object_count)) {
-    s = {(world::max_x - world::radius) * std::rand() / float(RAND_MAX) +
-             world::radius,
-         (world::max_y - world::radius) * std::rand() / float(RAND_MAX) +
-             world::radius};
+    s = {x, y};
+    x += world::max_x / std::sqrt(world::object_count);
+    if (x > world::max_x - world::radius) {
+      x = 0;
+      y += world::max_y / std::sqrt(world::object_count);
+    }
   }
   world.pos[0] = {6.8, 9};
   world.pos[1] = {5, 5};
