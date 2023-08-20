@@ -49,17 +49,15 @@ void main() {
   s[id] += v[id];
   bounds_check(s[id], v[id]);
   vec2 delta_v = vec2(0, 0);
-  vec2 delta_s = vec2(0,0);
   for(uint i = 0; i < count; i++) {
     if(i != id && distance(s[id], s[i]) < radius * 2) {
       color[id].r = 0.8;
       vec2 ds = s[id] - s[i];
       delta_v = - dot(v[id] - v[i], ds) / dot(ds, ds) * ds;
-      delta_s = normalize(ds) * 0.01;
+      vec2 direction = v[id] - delta_v;
     }
   }
 
   barrier();
   v[id] += delta_v;
-  s[id] += delta_s;
 }
